@@ -317,6 +317,10 @@ def run(commit_mod):
                 and not overlay(private_git, nested, "ls-files", "--",
                                 "agents/live.md").stdout.strip())
 
+            code, _, err = invoke(["-m", "missing legacy agent", "agents/missing.md"])
+            results["missing legacy agent stays on public route"] = (
+                code == 1 and "worktree PR" in err)
+
             (nested / "memory/persona").mkdir()
             results["is_dirty is quiet on a clean path"] = not commit_mod.is_dirty("memory/persona")
             write(nested, "memory/persona/note.md", "note\n")
