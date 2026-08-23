@@ -56,15 +56,22 @@ def _paths(raw_paths):
     return paths
 
 
+def _legacy_personal_delete(root, path, parts):
+    if (parts[:len(LEGACY_PERSONAL_DIR)] != LEGACY_PERSONAL_DIR
+            or (root / path).exists()):
+        return False
+    private = root / PRIVATE_DIR
+    repo = private if (private / ".git").is_dir() else root
+    return _git("ls-files", "--error-unmatch", "--", path, repo=repo).returncode == 0
+
+
 def _repo_for(paths):
     root = Path(REPO_DIR).resolve()
     personal = []
     for path in paths:
         parts = Path(path).parts
-        current = root / path
         routed = any(parts[:len(prefix)] == prefix for prefix in PERSONAL_DIRS)
-        legacy_delete = (parts[:len(LEGACY_PERSONAL_DIR)] == LEGACY_PERSONAL_DIR
-                         and not current.exists())
+        legacy_delete = _legacy_personal_delete(root, path, parts)
         personal.append(routed or legacy_delete)
     if any(personal) and not all(personal):
         raise RitualError("paths span public and private repositories")

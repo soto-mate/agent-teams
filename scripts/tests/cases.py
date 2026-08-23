@@ -689,6 +689,7 @@ COMMIT_SCENARIOS = [
     ("personal paths route to private overlay", True),
     ("deleted legacy agent routes to private overlay", True),
     ("live legacy agent stays on public route", True),
+    ("missing legacy agent stays on public route", True),
     ("is_dirty is quiet on a clean path", True),
     ("is_dirty sees an ignored new file", True),
     ("is_dirty is quiet once committed", True),
