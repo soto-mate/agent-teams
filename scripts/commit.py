@@ -9,6 +9,7 @@ import constants, store
 REPO_DIR = constants.REPO_DIR
 PERSONAL_DIRS = {("memory",), ("plans",), (".agents", "agents"),
                  ("docs", "OPERATING.md")}
+LEGACY_PERSONAL_DIR = ("agents",)
 PRIVATE_DIR = ".private"
 PUBLIC_ROUTE = ("public paths land through a worktree PR, not commit.py: "
                 "push the branch and merge it on green")
@@ -60,7 +61,11 @@ def _repo_for(paths):
     personal = []
     for path in paths:
         parts = Path(path).parts
-        personal.append(any(parts[:len(prefix)] == prefix for prefix in PERSONAL_DIRS))
+        current = root / path
+        routed = any(parts[:len(prefix)] == prefix for prefix in PERSONAL_DIRS)
+        legacy_delete = (parts[:len(LEGACY_PERSONAL_DIR)] == LEGACY_PERSONAL_DIR
+                         and not current.exists())
+        personal.append(routed or legacy_delete)
     if any(personal) and not all(personal):
         raise RitualError("paths span public and private repositories")
     if not any(personal):

@@ -22,7 +22,7 @@ only and fetch current state fresh.
 
 Wakes: a mention wakes a persona; the record it sees is a delta since its lane's last wake;
 a topic is an open session, resolving it ends the session, reopening starts fresh; status
-topics are the exception, they are never resolved. The flags -opus -fable -sonnet -low -mid -high
+topics are the exception, they are never resolved. The flags -opus -sonnet -low -mid -high
 -xtra -claude -codex -agy -opencode parse only off configured flag holders.
 A persona mention wakes that persona once; a persona-triggered wake and any wake in a loop topic
 post with mentions stripped; mid-wake asks go through `send.py --ask` and `read.py --wait`.
