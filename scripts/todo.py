@@ -66,7 +66,7 @@ def model_command(prompt, rail=None):
     if rail["provider"] != "claude":
         raise RuntimeError("digest seat provider %r is not supported" % rail["provider"])
     return [
-        "claude", "-p", "--model", rail["model"], "--effort", effort,
+        constants.CLAUDE_BIN, "-p", "--model", rail["model"], "--effort", effort,
         "--output-format", "json",
         "--tools", "", "--safe-mode", "--disable-slash-commands",
         "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',

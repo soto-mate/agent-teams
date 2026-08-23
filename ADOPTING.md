@@ -57,9 +57,9 @@ with `"<channel name>": "/absolute/path"` and every wake in that channel is told
 is and that its skills apply, read by path. `docs/OPERATING.md` has the rest, including where a
 domain's board lives.
 
-Replace `docs/OPERATING.md` with the skeleton in `docs/OPERATING.example.md`: the fork ships
-with the original estate's operating rules, which are an example, not yours. Or keep them and
-rewrite section by section as your fleet teaches you.
+Copy `docs/OPERATING.example.md` to the gitignored `docs/OPERATING.md`: the live file is your
+estate's, kept in the private overlay, and the example is only its skeleton. Fill it in section
+by section as your fleet teaches you.
 
 ## Create the private overlay
 

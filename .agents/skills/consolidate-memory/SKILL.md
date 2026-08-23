@@ -45,8 +45,8 @@ believed anyway, which is the failure this skill exists to prevent.
 6. Leave alone: anything recorded as a correction from the operator, anything marked
    do-not-reopen, and open threads that are still open. Age is not a reason to delete a
    correction.
-7. Commit with `git -C <repo> commit -- memory/<persona>` and a message naming the persona
-   and the counts. One commit per persona, never a sweep across several.
+7. Commit with `python3 scripts/commit.py -m "<message>" memory/<persona>` and a message
+   naming the persona and the counts. One commit per persona, never a sweep across several.
 8. Report in the topic: rows fixed, files collapsed, files deleted, and the flag list. Name
    what you deleted, so the owner can object without reading the diff.
 

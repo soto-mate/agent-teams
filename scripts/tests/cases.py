@@ -548,7 +548,6 @@ WAKE_IDENTITIES = [
     # the seat is the bridge agent and its subprocess env carries AGENT_TEAM_IDENTITY=bridge,
     # so --as bridge from inside it passes.
     ("bridge", "bridge", "bridge"),
-    ("bridge", "bridge", "bridge"),
 ]
 
 # (stream_id, topic, expected) for runner.wake_slug: safe as both a directory and a branch name,
@@ -688,6 +687,9 @@ COMMIT_SCENARIOS = [
     ("absolute symlink path commits", True),
     ("missing private repo refuses personal path", True),
     ("personal paths route to private overlay", True),
+    ("is_dirty is quiet on a clean path", True),
+    ("is_dirty sees an ignored new file", True),
+    ("is_dirty is quiet once committed", True),
 ]
 
 # (failed git args or None, behind count, expected notice, exact git args) for the handoff refresh.
@@ -865,7 +867,7 @@ PERSONA_SENDERS = [
     ("", {"archie@example.com"}, False),
 ]
 
-# (topic name, expected is_resolved) for listener.is_resolved_topic
+# (topic name, expected) for store.is_resolved
 RESOLVED_TOPICS = [
     ("✔ phase 2 wake path", True),
     ("phase 2 wake path", False),

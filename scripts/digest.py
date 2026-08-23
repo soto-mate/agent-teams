@@ -185,7 +185,7 @@ def safe_text(text):
 
 def refresh_topic(as_name, stream_id, channel, topic, fetch_fn=None, model_fn=None,
                   load_fn=None, mutate_fn=None, now_ts=None, force=False):
-    if (topic or "").strip().startswith(constants.RESOLVED_PREFIX):
+    if store.is_resolved(topic):
         return None
     fetch_fn = fetch_fn or fetch_delta
     model_fn = model_fn or model_call
@@ -234,7 +234,7 @@ def sweep_once(as_name=constants.BRIDGE_IDENTITY, streams_fn=None, stream_id_fn=
             continue
         for topic in topics_fn(as_name, stream_id):
             name, max_id = topic.get("name") or "", topic.get("max_id")
-            if not name or name.strip().startswith(constants.RESOLVED_PREFIX) or max_id is None:
+            if not name or store.is_resolved(name) or max_id is None:
                 continue
             if channel == constants.STATUS_STREAM and name == constants.BOARD_TOPIC:
                 continue
