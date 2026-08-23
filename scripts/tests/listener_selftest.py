@@ -21,6 +21,7 @@ def _body():
     from pathlib import Path
 
     import api
+    import commit
     import constants
     import digest
     import loops
@@ -48,6 +49,41 @@ def _body():
             failed += 1
             print("FAIL is_mention(%r) -> %r wanted %r" % (event, got, expected))
 
+    # commit_memory: probes the persona's own directory, commits only a dirty one, and a
+    # broken overlay leaves the wake standing.
+    calls = []
+    saved_dirty, saved_main, was_disabled = commit.is_dirty, commit.main, log.disabled
+    memory_path = str(constants.MEMORY_DIR / "bob")
+    try:
+        commit.is_dirty = lambda path: calls.append(path) or False
+        commit.main = lambda argv: calls.append(argv) or 0
+        commit_memory("bob")
+        if calls == [memory_path]:
+            passed += 1
+        else:
+            failed += 1
+            print("FAIL commit_memory committed a clean directory: %r" % calls)
+        calls.clear()
+        commit.is_dirty = lambda path: True
+        commit_memory("bob")
+        wanted = [["-m", prompts.MEMORY_COMMIT.format(persona="bob"), memory_path]]
+        if calls == wanted:
+            passed += 1
+        else:
+            failed += 1
+            print("FAIL commit_memory argv %r wanted %r" % (calls, wanted))
+        def _boom(path):
+            raise RuntimeError("no private overlay")
+        commit.is_dirty = _boom
+        log.disabled = True
+        commit_memory("bob")
+        passed += 1
+    except Exception as exc:
+        failed += 1
+        print("FAIL commit_memory raised into the wake: %r" % exc)
+    finally:
+        commit.is_dirty, commit.main, log.disabled = saved_dirty, saved_main, was_disabled
+
     for sender_email, persona_emails, expected in cases.PERSONA_SENDERS:
         got = is_persona_sender(sender_email, persona_emails)
         if got == expected:
@@ -56,14 +92,6 @@ def _body():
             failed += 1
             print("FAIL is_persona_sender(%r, %r) -> %r wanted %r" %
                   (sender_email, persona_emails, got, expected))
-
-    for topic, expected in cases.RESOLVED_TOPICS:
-        got = is_resolved_topic(topic)
-        if got == expected:
-            passed += 1
-        else:
-            failed += 1
-            print("FAIL is_resolved_topic(%r) -> %r wanted %r" % (topic, got, expected))
 
     dropped, parked = [], {"7:topic": 1234}
     saved_drop, saved_mutate = store.session_drop, store.mutate
@@ -497,13 +525,14 @@ def _body():
     # The caller computes one-hop relay from the sender and wake-time loop, then passes it to
     # the final post. Three rows pin the whole truth table.
     relay_posts = []
+    memory_commits = []
     loop_open = False
     saved_relay = (
         runner.run, runner.wake_cwd, send_mod.react, build_delta_record, provider_for_wake,
         resolve_wake_settings, loops.loop_for_lane, store.inflight_add, store.inflight_clear,
         store.lane_lock, store.session_get, store.session_set, store.mutate, _append_cost,
         _post_at_current_location, refresh_topic_digest, handle_rail_a, progress_sweep,
-        monitor.update_board, log.disabled,
+        monitor.update_board, log.disabled, commit_memory,
     )
     try:
         log.disabled = True
@@ -525,6 +554,7 @@ def _body():
         globals()["refresh_topic_digest"] = lambda *a, **k: None
         globals()["handle_rail_a"] = lambda *a, **k: None
         globals()["progress_sweep"] = lambda *a, **k: None
+        globals()["commit_memory"] = memory_commits.append
         monitor.update_board = lambda *a, **k: None
         for index, (sender_email, open_loop) in enumerate([
                 ("persona@example.com", False), ("mate@example.com", True),
@@ -548,11 +578,18 @@ def _body():
         globals()["refresh_topic_digest"], globals()["handle_rail_a"] = saved_relay[15:17]
         globals()["progress_sweep"] = saved_relay[17]
         monitor.update_board, log.disabled = saved_relay[18:20]
+        globals()["commit_memory"] = saved_relay[20]
     if relay_posts == [False, False, True]:
         passed += 1
     else:
         failed += 1
         print("FAIL wake relay truth table -> %r wanted [False, False, True]" % relay_posts)
+    # Driven at the call site: a memory commit helper is worth nothing if no wake calls it.
+    if memory_commits == ["bob", "bob", "bob"]:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL every wake commits its persona memory -> %r" % memory_commits)
 
     # The domain header line, driven at the call site: a helper that resolves the root correctly
     # is worth nothing if handle_wake never asks it about this wake's channel.

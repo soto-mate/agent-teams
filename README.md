@@ -30,6 +30,6 @@ scripts/restart.sh
 A fresh clone passes every selftest offline, with no credentials. Bot credentials are
 zuliprc files under `~/.config/agent-team/` and never live in this repository.
 Adopting this for your own fleet: [ADOPTING.md](ADOPTING.md). Working rules for a running
-fleet: [docs/OPERATING.md](docs/OPERATING.md).
+fleet: [docs/OPERATING.example.md](docs/OPERATING.example.md).
 
 Published as-is. No support is promised. MIT licensed, see [LICENSE](LICENSE).

@@ -9,6 +9,7 @@ import api
 import constants
 import personas as personas_mod
 import prompts
+import store
 
 ATTACH_LINE = re.compile(r"^[ \t]*\[attach:[ \t]*(.+?)[ \t]*\][ \t]*$")
 
@@ -313,7 +314,7 @@ def resolve_topic(as_name, channel, topic):
     _refuse_status_topic("--resolve", channel, topic)
     cfg = _ready(as_name)
     message_id = _topic_anchor_or_refuse(as_name, channel, topic)
-    new_topic = topic if topic.strip().startswith(constants.RESOLVED_PREFIX) else (constants.RESOLVED_PREFIX + " " + topic)
+    new_topic = topic if store.is_resolved(topic) else (constants.RESOLVED_PREFIX + " " + topic)
     api.check(
         api.request(cfg, "PATCH", "/api/v1/messages/%d" % message_id,
                     {"topic": new_topic, "propagate_mode": "change_all"}),

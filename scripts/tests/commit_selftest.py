@@ -292,6 +292,14 @@ def run(commit_mod):
                 == "memory/base.txt: merge: union"
                 and not raw(nested, "ls-files", "--", "memory/routed.txt").stdout.strip())
 
+            (nested / "memory/persona").mkdir()
+            results["is_dirty is quiet on a clean path"] = not commit_mod.is_dirty("memory/persona")
+            write(nested, "memory/persona/note.md", "note\n")
+            results["is_dirty sees an ignored new file"] = commit_mod.is_dirty("memory/persona")
+            code, _, _ = invoke(["-m", "note", "memory/persona/note.md"])
+            results["is_dirty is quiet once committed"] = (
+                code == 0 and not commit_mod.is_dirty("memory/persona"))
+
             for label, expected in cases.COMMIT_SCENARIOS:
                 check(results.get(label) is expected, label, repr(results.get(label)))
     finally:

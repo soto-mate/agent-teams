@@ -67,6 +67,16 @@ def load(name):
     return _read(path)
 
 
+def write_json(path, data):
+    """tmp+rename at a pathlib.Path, so no reader ever sees a half-written file. State under
+    STATE_DIR reaches this through mutate(); a file that lives elsewhere, like a domain board's,
+    calls it directly."""
+    tmp = path.with_name(".%s.tmp-%d" % (path.name, os.getpid()))
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=2, sort_keys=True)
+    os.replace(tmp, path)
+
+
 def mutate(name, fn):
     """Every write is tmp+rename under this one choke point; two writers cannot lose each other.
 
@@ -80,11 +90,15 @@ def mutate(name, fn):
         result = fn(data)
         if isinstance(result, dict):
             data = result
-        tmp = STATE_DIR / (".%s.json.tmp-%d" % (name, os.getpid()))
-        with open(tmp, "w") as f:
-            json.dump(data, f, indent=2, sort_keys=True)
-        os.replace(tmp, path)
+        write_json(path, data)
         return data
+
+
+def is_resolved(topic):
+    """A topic is an open session (ruling 7): a name starting with the resolve marker is resolved.
+    Reopening (removing the marker) starts a fresh session by design; nothing resurrects the old
+    one. The one resolve check; every caller runs through it."""
+    return (topic or "").strip().startswith(constants.RESOLVED_PREFIX)
 
 
 def normalize_topic(topic):
@@ -92,7 +106,7 @@ def normalize_topic(topic):
     key (finding 1a): a resolved rename must not orphan the row. The one normalize function;
     every lane_key call runs through it."""
     t = (topic or "").strip()
-    if t.startswith(constants.RESOLVED_PREFIX):
+    if is_resolved(t):
         t = t[len(constants.RESOLVED_PREFIX):]
         if t.startswith(" "):
             t = t[1:]

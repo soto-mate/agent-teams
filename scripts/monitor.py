@@ -179,8 +179,7 @@ def unresolved_topics(as_name=constants.BRIDGE_IDENTITY, stream_id_fn=None,
                 continue
             for topic in topics_fn(as_name, stream_id):
                 name, message_id = topic.get("name") or "", topic.get("max_id")
-                if not name or name.strip().startswith(constants.RESOLVED_PREFIX) \
-                        or message_id is None:
+                if not name or store.is_resolved(name) or message_id is None:
                     continue
                 rows.append({
                     "key": digest.digest_key(stream_id, name),
@@ -276,7 +275,7 @@ def _topic_todos(as_name, now_ts=None, groups=None):
             continue
         for topic in api.topics(as_name, stream_id):
             name, message_id = topic.get("name"), topic.get("max_id")
-            if not name or name.strip().startswith(constants.RESOLVED_PREFIX) or message_id is None:
+            if not name or store.is_resolved(name) or message_id is None:
                 continue
             message = _message(as_name, message_id)
             if message is None:
@@ -519,7 +518,7 @@ def domain_board(channel, body, root=None, as_name=constants.BRIDGE_IDENTITY,
         as_name, status, topic, body, state.get("message_id") if here else None)
     wanted = {"channel": status, "topic": topic, "message_id": message_id}
     if state != wanted:
-        path.write_text(json.dumps(wanted, indent=2) + "\n")
+        store.write_json(path, wanted)
     return message_id, changed
 
 

@@ -7,7 +7,8 @@ import sys
 
 import constants, store
 REPO_DIR = constants.REPO_DIR
-PERSONAL_DIRS = {("memory",), ("plans",), (".agents", "agents")}
+PERSONAL_DIRS = {("memory",), ("plans",), (".agents", "agents"),
+                 ("docs", "OPERATING.md")}
 PRIVATE_DIR = ".private"
 PUBLIC_ROUTE = ("public paths land through a worktree PR, not commit.py: "
                 "push the branch and merge it on green")
@@ -80,6 +81,14 @@ def _repo_for(paths):
 def _route(paths):
     repo = _repo_for(paths)
     return repo, paths
+
+
+def is_dirty(path):
+    """True when the private overlay carries uncommitted work under path. Ignored files count:
+    memory/ is gitignored in the public repository, so a new note shows only under --ignored."""
+    repo, paths = _route(_paths([path]))
+    proc = _git("status", "--porcelain", "-uall", "--ignored", "--", *paths, repo=repo)
+    return bool(proc.returncode == 0 and proc.stdout.strip())
 
 
 def _commit(message, paths):

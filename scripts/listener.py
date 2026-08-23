@@ -16,6 +16,7 @@ import threading
 import time
 
 import api
+import commit
 import constants
 import digest
 import loops
@@ -46,12 +47,6 @@ def is_mention(event):
 
 def is_persona_sender(sender_email, persona_emails):
     return bool(sender_email) and sender_email in persona_emails
-
-
-def is_resolved_topic(topic_name):
-    """A topic is an open session (ruling 7): a name starting with the resolve marker is resolved.
-    Reopening (removing the marker) starts a fresh session by design; nothing resurrects the old one."""
-    return (topic_name or "").strip().startswith(constants.RESOLVED_PREFIX)
 
 
 # A flag word is its vocabulary word with a dash: adding a model, effort level or provider is
@@ -346,7 +341,7 @@ def handle_topic_resolved(event):
     dropping it. Reopening (ruling 7) never resurrects it; a later mention starts fresh."""
     new_subject = event.get("subject")
     stream_id = event.get("stream_id")
-    if new_subject is None or stream_id is None or not is_resolved_topic(new_subject):
+    if new_subject is None or stream_id is None or not store.is_resolved(new_subject):
         return
     normalized = store.normalize_topic(new_subject)
     for persona in personas.PERSONAS:
@@ -363,6 +358,20 @@ def handle_topic_resolved(event):
 
 # --- the wake path ---------------------------------------------------------------------------
 
+def commit_memory(identity):
+    """Post-wake: land whatever the persona wrote to its own memory. A wake that cannot take the
+    git lock leaves the directory dirty and the next wake sweeps it up."""
+    path = str(constants.MEMORY_DIR / identity)
+    try:
+        if not commit.is_dirty(path):
+            return
+        code = commit.main(["-m", prompts.MEMORY_COMMIT.format(persona=identity), path])
+        if code:
+            log.warning("memory commit for %s exited %s", identity, code)
+    except (Exception, SystemExit):
+        log.exception("memory commit failed for %s", identity)
+
+
 def handle_wake(identity, event, flag_holder_ids, persona_emails=frozenset()):
     msg = event.get("message") or {}
     stream_id = msg.get("stream_id")
@@ -378,7 +387,7 @@ def handle_wake(identity, event, flag_holder_ids, persona_emails=frozenset()):
 
     lane = store.lane_key(stream_id, topic, identity)
 
-    if is_resolved_topic(topic):
+    if store.is_resolved(topic):
         store.session_drop(lane)
         log.info("skip wake: lane %s topic is resolved", lane)
         return
@@ -477,6 +486,7 @@ def handle_wake(identity, event, flag_holder_ids, persona_emails=frozenset()):
     finally:
         finish_progress(lane)
         store.inflight_clear(lane)
+        commit_memory(identity)
 
 
 # --- Rail A: a finished persona wake continues its lane's open loop, if any ---------------------
@@ -575,7 +585,7 @@ def handle_operator_tag(event, mate_id):
     if is_tag_stale(ts, time.time(), constants.TAG_MAX_AGE_MIN):
         log.info(prompts.TAG_STALE.format(sender=sender_id, message_id=message_id, max_age=constants.TAG_MAX_AGE_MIN))
         return
-    if is_resolved_topic(topic):
+    if store.is_resolved(topic):
         log.info("operator tag on resolved topic %r; skipped", topic)
         return
 

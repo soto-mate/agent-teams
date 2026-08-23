@@ -268,6 +268,8 @@ STALLED_WAKE_ALERT = (
 )
 NO_PROCESS_PID = "none"
 
+MEMORY_COMMIT = "{persona} memory"
+
 BOARD_UPDATE_ALERT = "Board section {section} failed to update; see listener.err.log."
 
 BOARD_STUCK = "STUCK"

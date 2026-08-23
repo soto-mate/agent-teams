@@ -55,6 +55,14 @@ def _body():
         if not all(part in command for part in expected) or str(constants.REPO_DIR) in command:
             command_ok = False
             print("FAIL %s sweep command widened the sweep: %r" % (rail["provider"], command))
+    saved_bin = constants.CLAUDE_BIN
+    try:
+        constants.CLAUDE_BIN = "/nonexistent/claude"
+        if model_command("prompt", cases.TODO_RAIL_CLAUDE)[0] != constants.CLAUDE_BIN:
+            command_ok = False
+            print("FAIL claude sweep command ignored CLAUDE_BIN")
+    finally:
+        constants.CLAUDE_BIN = saved_bin
     fenced = model_command("prompt", cases.TODO_RAIL_CLAUDE)
     if fenced[fenced.index("--tools") + 1] != "" \
             or json.loads(fenced[fenced.index("--mcp-config") + 1]) != {"mcpServers": {}}:

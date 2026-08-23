@@ -19,4 +19,5 @@ config/rails.json
 config/channels.json
 config/domains.json
 config/status.json
+docs/OPERATING.md
 plugins/

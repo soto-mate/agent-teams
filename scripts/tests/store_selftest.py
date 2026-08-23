@@ -43,6 +43,27 @@ def _body():
         print("FAIL corrupt state recovery -> empty=%r moved=%r clean=%r" %
               (empty, moved, clean))
 
+    # write_json is the tmp+rename choke point mutate() uses; a file outside STATE_DIR, like a
+    # domain board's, calls it directly and must land whole and leave no tmp behind.
+    with TemporaryDirectory() as temp_dir:
+        target = Path(temp_dir) / "board.json"
+        write_json(target, {"b": 2, "a": 1})
+        leftovers = [p.name for p in target.parent.iterdir() if p.name != target.name]
+        import json as _json
+        if _json.loads(target.read_text()) == {"a": 1, "b": 2} and not leftovers:
+            passed += 1
+        else:
+            failed += 1
+            print("FAIL write_json -> %r leftovers=%r" % (target.read_text(), leftovers))
+
+    for topic, expected in cases.RESOLVED_TOPICS:
+        got = is_resolved(topic)
+        if got == expected:
+            passed += 1
+        else:
+            failed += 1
+            print("FAIL is_resolved(%r) -> %r wanted %r" % (topic, got, expected))
+
     for stream_id, topic, persona, expected in cases.LANE_KEYS:
         got = lane_key(stream_id, topic, persona)
         if got == expected:
