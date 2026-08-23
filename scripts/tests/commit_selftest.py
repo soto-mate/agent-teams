@@ -292,6 +292,31 @@ def run(commit_mod):
                 == "memory/base.txt: merge: union"
                 and not raw(nested, "ls-files", "--", "memory/routed.txt").stdout.strip())
 
+            (nested / "agents").mkdir()
+            write(nested, "agents/legacy.md", "legacy\n")
+            overlay(private_git, nested, "add", "-f", "--", "agents/legacy.md")
+            overlay(private_git, nested, "commit", "-m", "legacy agent")
+            write(nested, ".agents/agents/legacy.md", "current\n")
+            (nested / "agents/legacy.md").unlink()
+            public_before = raw(nested, "rev-parse", "HEAD").stdout.strip()
+            code, out, _ = invoke([
+                "-m", "move legacy agent", "agents/legacy.md", ".agents/agents/legacy.md"])
+            results["deleted legacy agent routes to private overlay"] = (
+                code == 0 and "pushed " in out
+                and public_before == raw(nested, "rev-parse", "HEAD").stdout.strip()
+                and not overlay(private_git, nested, "ls-files", "--",
+                                "agents/legacy.md").stdout.strip()
+                and overlay(private_git, nested, "ls-files", "--",
+                            ".agents/agents/legacy.md").stdout.strip()
+                == ".agents/agents/legacy.md")
+
+            write(nested, "agents/live.md", "live\n")
+            code, _, err = invoke(["-m", "live legacy agent", "agents/live.md"])
+            results["live legacy agent stays on public route"] = (
+                code == 1 and "worktree PR" in err
+                and not overlay(private_git, nested, "ls-files", "--",
+                                "agents/live.md").stdout.strip())
+
             (nested / "memory/persona").mkdir()
             results["is_dirty is quiet on a clean path"] = not commit_mod.is_dirty("memory/persona")
             write(nested, "memory/persona/note.md", "note\n")

@@ -72,7 +72,7 @@ def _body():
 
     try:
         model_efforts = json.loads(MODEL_EFFORT_DEFAULTS_EXAMPLE_PATH.read_text())
-        if set(model_efforts) == {"opus", "fable"} and all(
+        if set(model_efforts) == {"opus"} and all(
                 level in _EFFORT_SCALE for level in model_efforts.values()):
             passed += 1
         else:

@@ -541,7 +541,7 @@ def _body():
         send_mod.react = lambda *a, **k: None
         globals()["build_delta_record"] = lambda *a, **k: ("", None)
         globals()["provider_for_wake"] = lambda *a, **k: "claude"
-        globals()["resolve_wake_settings"] = lambda *a, **k: ("fable", "high", "high")
+        globals()["resolve_wake_settings"] = lambda *a, **k: ("sonnet", "high", "high")
         loops.loop_for_lane = lambda *a, **k: {"id": 1} if loop_open else None
         store.inflight_add = lambda *a, **k: None
         store.inflight_clear = lambda *a, **k: None
