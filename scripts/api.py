@@ -4,9 +4,11 @@ import argparse
 import base64
 import configparser
 import json
+import logging
 import mimetypes
 import os
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -14,6 +16,7 @@ import urllib.request
 import constants
 import prompts
 
+log = logging.getLogger("agent-team.api")
 _CONF = {}
 _ME = {}
 _WINDOW = {}
@@ -90,20 +93,28 @@ def request(cfg, method, path, params=None, upload=None, open_fn=urllib.request.
     elif method in ("GET", "DELETE") and params:
         url += "?" + _encode(params)
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
-    try:
-        with open_fn(req, timeout=60) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as exc:
-        raw = exc.read().decode(errors="replace")
+    for attempt in range(constants.API_RETRIES + 1):
         try:
-            payload = json.loads(raw)
-        except ValueError:
-            payload = {"msg": raw[:400]}
-        payload.setdefault("result", "error")
-        payload["http_status"] = exc.code
-        return payload
-    except urllib.error.URLError as exc:
-        raise SystemExit("network error talking to %s: %s" % (cfg["site"], exc.reason))
+            with open_fn(req, timeout=60) as resp:
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as exc:
+            raw = exc.read().decode(errors="replace")
+            try:
+                payload = json.loads(raw)
+            except ValueError:
+                payload = {"msg": raw[:400]}
+            payload.setdefault("result", "error")
+            payload["http_status"] = exc.code
+            return payload
+        except urllib.error.URLError as exc:
+            # urlopen only raises URLError before the request is on the wire: TLS handshake,
+            # DNS, refused. A timeout after send raises TimeoutError, which is never retried
+            # here because the server may already have posted (Bob, 2026-08-24).
+            if attempt == constants.API_RETRIES:
+                raise SystemExit("network error talking to %s: %s" % (cfg["site"], exc.reason))
+            log.warning("network error talking to %s (%s), retrying in %ss",
+                        cfg["site"], exc.reason, constants.API_RETRY_DELAY_S)
+            time.sleep(constants.API_RETRY_DELAY_S)
 
 
 def check(payload, what):
