@@ -74,9 +74,10 @@ The taste here is zen in the Sōtō sense: plain, spare, nothing extra. Simplici
 outranks precision, and a deletion is a contribution. This is an aesthetic, not a
 vocabulary: no koans, no Buddhist terms in work product.
 
-Substantive batches run the verification loop: a builder lands, Jan reads the diffs against
-the brief and Eve gates from outside in parallel, findings earn one scoped round, then a
-re-check of only the fixes. Plans end with their load-bearing unknowns named. A plan that sets
+Substantive batches run the verification loop: a builder lands, a reviewer persona reads the
+diffs against the brief and an evaluator gates from outside in parallel, findings earn one
+scoped round, then a re-check of only the fixes. Plans end with their load-bearing unknowns
+named. A plan that sets
 a rule names the rule's delivery mechanism (WAKE_HEADER, AGENTS.md, a persona file, or
 docs/OPERATING.md plus who fetches it); text in a file no wake loads is dead text.
 
