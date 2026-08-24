@@ -107,9 +107,10 @@ def _body():
         failed += 1
         print("FAIL resolved topic left sessions or parking: %r %r" % (dropped, parked))
 
+    model_flags = {flag for row in constants.HARNESS_DEFAULTS.values()
+                   for flag in row["flags"]}
     vocabulary = {"-" + word for word in
-                  set(constants.CLAUDE_MODELS) | set(constants.EFFORT_LEVELS)
-                  | set(constants.PROVIDERS)}
+                  model_flags | set(constants.EFFORT_LEVELS) | set(constants.PROVIDERS)}
     if set(FLAG_WORDS) == vocabulary:
         passed += 1
     else:
@@ -124,6 +125,14 @@ def _body():
         else:
             failed += 1
             print("FAIL parse_flags(%r) -> %r wanted %r" % (content, got, expected))
+
+    for flags, expected in cases.FLAG_OVERRIDES:
+        got = flags_to_overrides(flags)
+        if got == expected:
+            passed += 1
+        else:
+            failed += 1
+            print("FAIL flags_to_overrides(%r) -> %r wanted %r" % (flags, got, expected))
 
     for identity, flags, row, matrix, expected in cases.PROVIDER_SELECTIONS:
         got = provider_for_wake(identity, flags, row, matrix)
