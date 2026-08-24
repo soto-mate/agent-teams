@@ -345,10 +345,25 @@ STATUS_CHANNELS = [
 STATUS_TOPIC_GUARD = [
     ("--resolve", constants.STATUS_STREAM, True),
     ("--move-to", constants.STATUS_STREAM, True),
+    ("--reopen", constants.STATUS_STREAM, True),
     ("--resolve", constants.DOMAIN_STATUS_CHANNEL.format(channel="money"), True),
     ("--move-to", constants.DOMAIN_STATUS_CHANNEL.format(channel="money"), True),
+    ("--reopen", constants.DOMAIN_STATUS_CHANNEL.format(channel="money"), True),
     ("--resolve", "setup", False),
     ("--move-to", "setup", False),
+    ("--reopen", "setup", False),
+]
+
+# (identity, topic, expected new name or None) for send.reopen_topic, driven with the API stubbed.
+# None means no-op: no PATCH at all. The non-bridge rows are the permission: --reopen is the one
+# topic verb open to every identity, so it is not in BRIDGE_ONLY_VERBS below.
+REOPEN_TOPICS = [
+    (constants.BRIDGE_IDENTITY, constants.RESOLVED_PREFIX + " Co / Person / subject",
+     "Co / Person / subject"),
+    ("eve", constants.RESOLVED_PREFIX + " Co / Person / subject", "Co / Person / subject"),
+    ("eve", constants.RESOLVED_PREFIX + "Co / Person / subject", "Co / Person / subject"),
+    ("eve", "Co / Person / subject", None),
+    ("bob", "", None),
 ]
 
 # (verb, channel, should refuse) for send._refuse_status_channel. Archive and rename take the

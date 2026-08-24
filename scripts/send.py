@@ -243,8 +243,9 @@ def board_message(as_name, channel, topic, body, message_id=None):
 
 
 def verb_allowed(as_name):
-    """--resolve and --move-to are bridge-only (the topic-verbs ledger grant); every other
-    identity is refused before any API call, regardless of AGENT_TEAM_IDENTITY."""
+    """--resolve, --move-to and the channel verbs are bridge-only (the topic-verbs ledger grant);
+    every other identity is refused before any API call, regardless of AGENT_TEAM_IDENTITY.
+    --reopen is not on this gate: reopening is the inverse of a close and loses nothing."""
     return as_name == constants.BRIDGE_IDENTITY
 
 
@@ -319,6 +320,24 @@ def resolve_topic(as_name, channel, topic):
         api.request(cfg, "PATCH", "/api/v1/messages/%d" % message_id,
                     {"topic": new_topic, "propagate_mode": "change_all"}),
         "PATCH /messages (resolve)",
+    )
+    return message_id
+
+
+def reopen_topic(as_name, channel, topic):
+    """Strip the ✔ prefix, propagate_mode change_all, the inverse of resolve_topic. Open to every
+    identity: the seat holding new inbound is the one that knows the session is live again. A
+    topic that is already open is a no-op, and returns None without an API call."""
+    _refuse_status_topic("--reopen", channel, topic)
+    if not store.is_resolved(topic):
+        sys.stderr.write(prompts.TOPIC_ALREADY_OPEN.format(channel=channel, topic=topic) + "\n")
+        return None
+    cfg = _ready(as_name)
+    message_id = _topic_anchor_or_refuse(as_name, channel, topic)
+    api.check(
+        api.request(cfg, "PATCH", "/api/v1/messages/%d" % message_id,
+                    {"topic": store.normalize_topic(topic), "propagate_mode": "change_all"}),
+        "PATCH /messages (reopen)",
     )
     return message_id
 
@@ -475,6 +494,10 @@ def main():
                      help="Bridge-only. Marks --channel/--topic resolved (native ✔ rename, "
                           "notification-bot marker included). Moving a live topic resets its "
                           "lane; a status channel's topics are refused.")
+    ap.add_argument("--reopen", action="store_true",
+                     help="Strips the ✔ from --channel/--topic, the inverse of --resolve. Open "
+                          "to every identity: new inbound reopens the session before it posts. "
+                          "An open topic is a no-op; a status channel's topics are refused.")
     ap.add_argument("--move-to", dest="move_to", metavar="CHANNEL",
                      help="Bridge-only. Moves --channel/--topic to CHANNEL. Moving a live topic "
                           "resets its lane; a status channel's topics are refused.")
@@ -503,16 +526,20 @@ def main():
         ap.error("--as is required")
     if args.ask and (
             bool(args.body) == bool(args.body_file) or args.react_to or args.resolve
-            or args.move_to or args.channel_create or args.channel_update
+            or args.reopen or args.move_to or args.channel_create or args.channel_update
             or args.channel_archive or args.subscribe or args.unsubscribe):
         ap.error("--ask is valid only with --body or --body-file")
-    if args.resolve or args.move_to:
-        if args.resolve and args.move_to:
-            ap.error("give exactly one of --resolve or --move-to")
+    if args.resolve or args.reopen or args.move_to:
+        if sum(map(bool, (args.resolve, args.reopen, args.move_to))) > 1:
+            ap.error("give exactly one of --resolve, --reopen or --move-to")
         if not args.channel or not args.topic:
             ap.error("--channel and --topic are required")
         if args.resolve:
             print(resolve_topic(args.as_name, args.channel, args.topic))
+        elif args.reopen:
+            message_id = reopen_topic(args.as_name, args.channel, args.topic)
+            if message_id is not None:
+                print(message_id)
         else:
             print(move_topic(args.as_name, args.channel, args.topic, args.move_to))
         return
