@@ -59,8 +59,8 @@ def _body():
             print("FAIL _failure_output(%r, %r) -> %r wanted %r" %
                   (stderr, stdout, got, expected))
 
-    for persona, model, session, effort, expected in cases.RUNNER_CMDS:
-        got = _build_cmd(persona, model, session, effort)
+    for persona, model, session, effort, mcp_config, expected in cases.RUNNER_CMDS:
+        got = _build_cmd(persona, model, session, effort, mcp_config)
         if got == expected:
             passed += 1
         else:
@@ -86,14 +86,22 @@ def _body():
             failed += 1
             print("FAIL _parse_claude_stream(...) -> %r wanted %r" % (got, expected))
 
-    for model, session, effort, output_path, expected in cases.CODEX_RUNNER_CMDS:
-        got = _build_cmd_codex(model, session, effort, output_path)
+    for model, session, effort, output_path, servers, expected in cases.CODEX_RUNNER_CMDS:
+        got = _build_cmd_codex(model, session, effort, output_path, servers)
         if got == expected:
             passed += 1
         else:
             failed += 1
             print("FAIL _build_cmd_codex(%r,%r,%r) -> %r wanted %r" %
                   (model, session, effort, got, expected))
+
+    got = _opencode_mcp_config(cases.MCP_SERVERS)
+    if got == cases.OPENCODE_MCP_CONFIG:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL _opencode_mcp_config(...) -> %r wanted %r" %
+              (got, cases.OPENCODE_MCP_CONFIG))
 
     for payload, expected in cases.CODEX_PARSES:
         try:
@@ -517,11 +525,14 @@ def _body():
                 globals()["REPO_DIR"] = Path(root) / "repo"
                 (REPO_DIR / "config").mkdir(parents=True)
                 for name in _WORKTREE_LINKS:
-                    (REPO_DIR / name).write_text("source")
+                    source = REPO_DIR / name
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    source.write_text("source")
                 tree = Path(root) / "tree"
                 (tree / "config").mkdir(parents=True)
                 name = _WORKTREE_LINKS[1]
                 target = tree / name
+                target.parent.mkdir(parents=True, exist_ok=True)
                 if state == "correct":
                     target.symlink_to(REPO_DIR / name)
                 elif state == "elsewhere":
@@ -555,6 +566,16 @@ def _body():
     else:
         failed += 1
         print("FAIL config files missing from _WORKTREE_LINKS: %s" % ", ".join(unlinked))
+
+    unlinked = sorted(
+        "mcps/" + path.name.replace(".example.json", ".json")
+        for path in (REPO_DIR / "mcps").glob("*.example.json")
+        if "mcps/" + path.name.replace(".example.json", ".json") not in _WORKTREE_LINKS)
+    if not unlinked:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL MCP files missing from _WORKTREE_LINKS: %s" % ", ".join(unlinked))
 
     log.disabled = True
     for failed_args, behind, expected, expected_args in cases.WORKTREE_REFRESHES:

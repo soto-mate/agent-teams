@@ -20,6 +20,7 @@ import store
 
 REPO_DIR = Path(__file__).resolve().parent.parent
 PERSONA_DIR = REPO_DIR / ".agents" / "agents"
+MCP_CONFIG = REPO_DIR / "mcps" / "playwright.json"
 # provider -> the constants name holding its binary, which is also the env override that sets it
 PROVIDER_BIN = {"claude": "CLAUDE_BIN", "codex": "CODEX_BIN",
                 "agy": "AGY_BIN", "opencode": "OPENCODE_BIN"}
@@ -170,12 +171,14 @@ def _run_jsonl(cmd, *, cwd, env, timeout, wake_log, stdin_text=None, tee_stderr=
     return proc, wake_log.read_text()
 
 
-def _build_cmd(persona, model, session, effort):
+def _build_cmd(persona, model, session, effort, mcp_config=None):
     """claude -p --agent <persona> with realtime JSON events and one terminal result.
     No prompt argument: with none, claude -p reads it from stdin."""
     # headless has nobody to approve, and an untrusted cwd (a build worktree) fences Bash off
     cmd = [constants.CLAUDE_BIN, "-p", "--dangerously-skip-permissions",
            "--output-format", "stream-json", "--verbose", "--agent", persona]
+    if mcp_config:
+        cmd += ["--mcp-config", str(mcp_config)]
     if model:
         cmd += ["--model", model]
     if session:
@@ -215,7 +218,54 @@ def _parse_claude_stream(output):
     return _parse(terminal)
 
 
-def _build_cmd_codex(model, session, effort, output_path):
+def _toml_key(text):
+    return text if re.fullmatch(r"[A-Za-z0-9_-]+", text) else json.dumps(text)
+
+
+def _mcp_servers():
+    if not MCP_CONFIG.is_file():
+        return {}
+    try:
+        config = json.loads(MCP_CONFIG.read_text())
+    except (OSError, ValueError) as exc:
+        raise RuntimeError("cannot read MCP config %s: %s" % (MCP_CONFIG, exc))
+    servers = config.get("mcpServers") if isinstance(config, dict) else None
+    if not isinstance(servers, dict):
+        raise RuntimeError("MCP config %s has no mcpServers object" % MCP_CONFIG)
+    return servers
+
+
+def _codex_mcp_args(servers):
+    args = []
+    for name, server in sorted(servers.items()):
+        if not isinstance(server, dict) or not isinstance(server.get("command"), str):
+            raise RuntimeError("MCP server %r has no command" % name)
+        prefix = "mcp_servers.%s" % _toml_key(name)
+        args += ["-c", "%s.command=%s" % (prefix, json.dumps(server["command"]))]
+        if "args" in server:
+            args += ["-c", "%s.args=%s" % (prefix, json.dumps(server["args"]))]
+        for key, value in sorted((server.get("env") or {}).items()):
+            args += ["-c", "%s.env.%s=%s" %
+                     (prefix, _toml_key(key), json.dumps(value))]
+    return args
+
+
+def _opencode_mcp_config(servers):
+    translated = {}
+    for name, server in sorted(servers.items()):
+        if not isinstance(server, dict) or not isinstance(server.get("command"), str):
+            raise RuntimeError("MCP server %r has no command" % name)
+        translated[name] = {
+            "type": "local",
+            "command": [server["command"]] + list(server.get("args") or []),
+            "enabled": True,
+        }
+        if server.get("env"):
+            translated[name]["environment"] = server["env"]
+    return {"mcp": translated}
+
+
+def _build_cmd_codex(model, session, effort, output_path, mcp_servers=None):
     """No prompt argument: codex exec reads it from stdin when none is given. A bare `-`
     reads stdin too, but under `exec resume` its parser takes it for a flag."""
     cmd = [constants.CODEX_BIN, "exec"]
@@ -228,9 +278,9 @@ def _build_cmd_codex(model, session, effort, output_path):
         # full access, matching Claude Bob's reach; workspace-write hard-denies .git (Mate, 2026-08-13)
         "-c", 'sandbox_mode="danger-full-access"',
         "-c", 'model_reasoning_effort="%s"' % effort,
-        "-m", model,
-        "-o", output_path,
     ]
+    cmd += _codex_mcp_args(mcp_servers or {})
+    cmd += ["-m", model, "-o", output_path]
     if session:
         cmd.append(session)
     return cmd
@@ -410,7 +460,8 @@ def _wake_identity(persona, identity):
 def _run_claude(persona, prompt, *, model, effort, session, cwd, timeout, identity,
                 wake_log=None):
     run_prompt = _run_prompt("claude", persona, prompt, session, identity)
-    cmd = _build_cmd(persona, model, session, effort)
+    cmd = _build_cmd(
+        persona, model, session, effort, MCP_CONFIG if MCP_CONFIG.is_file() else None)
     env = dict(os.environ)
     env["AGENT_TEAM_IDENTITY"] = _wake_identity(persona, identity)
     env["CLAUDE_CODE_DISABLE_TERMINAL_TITLE"] = "1"
@@ -439,7 +490,7 @@ def _run_codex(persona, prompt, *, model, effort, session, cwd, timeout, identit
     final.close()
     try:
         run_prompt = _run_prompt("codex", persona, prompt, session, identity)
-        cmd = _build_cmd_codex(model, session, effort, final_path)
+        cmd = _build_cmd_codex(model, session, effort, final_path, _mcp_servers())
         env = dict(os.environ)
         env["AGENT_TEAM_IDENTITY"] = _wake_identity(persona, identity)
         proc, stdout = _run_jsonl(
@@ -530,6 +581,9 @@ def _run_opencode(persona, prompt, *, model, effort, session, cwd, timeout, iden
     env = dict(os.environ)
     env["AGENT_TEAM_IDENTITY"] = _wake_identity(persona, identity)
     env["OPENCODE_DISABLE_CLAUDE_CODE"] = "true"
+    servers = _mcp_servers()
+    if servers:
+        env["OPENCODE_CONFIG_CONTENT"] = json.dumps(_opencode_mcp_config(servers))
     proc, stdout = _run_jsonl(
         cmd, cwd=run_cwd, env=env, timeout=timeout, wake_log=wake_log,
         stdin_text=run_prompt, tee_stderr=True)
@@ -585,7 +639,8 @@ def wants_worktree(identity, exists, build=None, join=None):
     return bool(exists) and identity in (constants.WORKTREE_JOIN if join is None else join)
 
 
-_WORKTREE_LINKS = (".venv", "config/persona-matrix.json", "config/harness-defaults.json",
+_WORKTREE_LINKS = (".venv", "mcps/playwright.json",
+                   "config/persona-matrix.json", "config/harness-defaults.json",
                    "config/model-effort-defaults.json", "config/rails.json",
                    "config/channels.json", "config/domains.json", "config/status.json",
                    "config/embassies.json")
@@ -619,6 +674,7 @@ def _ensure_links(path):
         elif target.exists():
             log.warning("worktree %s has a real %s, not linking", path, name)
             continue
+        target.parent.mkdir(parents=True, exist_ok=True)
         target.symlink_to(source)
 
 

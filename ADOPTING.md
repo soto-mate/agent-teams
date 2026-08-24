@@ -49,8 +49,17 @@ Each persona's matrix row selects its harness: `claude` runs Claude Code, `codex
 `agy` runs agy, and `opencode` runs OpenCode. Install and log in only to the CLIs named by
 the live matrix.
 
-Optional browser tools start from `.mcp.example.json`; copy it to the gitignored `.mcp.json`
-and edit it for the local install.
+Optional browser tools start from `mcps/playwright.example.json`; copy it to the gitignored
+`mcps/playwright.json` and edit it for the local install. That one definition serves Claude,
+Codex, agy, and OpenCode wakes.
+
+Installed agy versions that do not read workspace MCP files need their global path linked to
+that same definition. The command fails safely if the path already holds another configuration:
+
+```sh
+mkdir -p ~/.gemini/config
+ln -s "$(pwd -P)/mcps/playwright.json" ~/.gemini/config/mcp_config.json
+```
 
 `config/domains.json` ships empty and stays empty until a channel of yours fronts a repo. Fill it
 with `"<channel name>": "/absolute/path"` and every wake in that channel is told where that repo
@@ -150,9 +159,10 @@ persona in a topic. Adoption is complete when that persona wakes, works, and rep
 
 Cutover is a desktop operation after the export gate passes. Back up the old root, clone the
 public repository into a new folder, and copy only these private surfaces from the old root:
-`memory/`, `plans/`, `.agents/agents/`, `.mcp.json`, and the live `config/*.json` files. Run the
-private-overlay bootstrap above with the archived private repository as its remote. Its
-existing `main` remains the old estate history; new personal commits use `private-overlay`.
+`memory/`, `plans/`, `.agents/agents/`, `mcps/playwright.json`, and the live `config/*.json`
+files. Run the private-overlay bootstrap above with the archived private repository as its
+remote. Its existing `main` remains the old estate history; new personal commits use
+`private-overlay`.
 
 Render and load the launchd template from the new root. If the installed job retains its old
 label, render that label into the plist, put the same value in
