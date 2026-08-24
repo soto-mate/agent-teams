@@ -157,6 +157,19 @@ def _body():
         failed += 1
         print("FAIL status example does not load: %s" % exc)
 
+    try:
+        embassies = json.loads(EMBASSIES_EXAMPLE_PATH.read_text())
+        if isinstance(embassies, dict) and all(
+                isinstance(name, str) and name and isinstance(seat, str) and seat
+                for name, seat in embassies.items()):
+            passed += 1
+        else:
+            failed += 1
+            print("FAIL embassies example names or seats are invalid")
+    except (OSError, ValueError) as exc:
+        failed += 1
+        print("FAIL embassies example does not load: %s" % exc)
+
     for channel, expected in cases.DOMAIN_ROOTS:
         got = domain_root(channel, cases.DOMAIN_MAP)
         if got == expected:

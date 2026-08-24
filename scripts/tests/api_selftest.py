@@ -73,12 +73,14 @@ def _body():
     else:
         failed += 1
         print("FAIL PATCH request transport -> %r payload=%r" % (captured, payload))
-    for asked, env, should_exit in cases.IDENTITY:
+    for asked, env, embassies, should_exit in cases.IDENTITY:
         before = os.environ.get("AGENT_TEAM_IDENTITY")
+        before_embassies = constants.EMBASSIES
         if env is None:
             os.environ.pop("AGENT_TEAM_IDENTITY", None)
         else:
             os.environ["AGENT_TEAM_IDENTITY"] = env
+        constants.EMBASSIES = embassies
         try:
             enforce_identity(asked)
             exited = False
@@ -88,6 +90,7 @@ def _body():
             os.environ.pop("AGENT_TEAM_IDENTITY", None)
             if before is not None:
                 os.environ["AGENT_TEAM_IDENTITY"] = before
+            constants.EMBASSIES = before_embassies
         if exited == should_exit:
             passed += 1
         else:
