@@ -14,6 +14,7 @@ selftests, push the branch, then `gh pr create`, `gh pr merge --auto --rebase`,
 `gh pr checks --watch`, and `gh pr view --json mergeCommit` for the merged sha; then run
 `python3 scripts/commit.py --pull` and report that sha. The wake waits for the merge: it never
 closes on an open PR. A rebase conflict, a red check or a red selftest stops the wake: it
-reports the branch and the PR, unlanded, and names what stopped it. Jan and Eve read the landed
-sha and join that worktree when it already exists; a finding becomes a follow-up PR from the
-same worktree, never a held branch. Findings stay in the topic.
+reports the branch and the PR, unlanded, and names what stopped it. A reviewer persona reads the
+landed sha against the brief and an evaluator gates from outside; both join that worktree when it
+already exists. A finding becomes a follow-up PR from the same worktree, never a held branch.
+Findings stay in the topic.
