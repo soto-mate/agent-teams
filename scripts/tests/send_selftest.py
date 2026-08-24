@@ -203,6 +203,36 @@ def _body():
             failed += 1
             print("FAIL _refuse_status_channel(%r, %r) code=%r note=%r"
                   % (verb, channel, code, stderr.getvalue()))
+    # --reopen is open to every identity, so the row drives the real function with the API
+    # stubbed and reads back the PATCH it would have sent, or proves there was none.
+    old_ready, old_request, old_check, old_anchor = (
+        _ready, api.request, api.check, _topic_anchor_message)
+    try:
+        globals()["_ready"] = lambda as_name, enforce=True: {"name": as_name}
+        globals()["_topic_anchor_message"] = lambda as_name, channel, topic: 11
+        api.check = lambda payload, what: payload
+        for who, topic, expected in cases.REOPEN_TOPICS:
+            seen = []
+            api.request = lambda cfg, m, path, params, seen=seen: seen.append(
+                (m, path, params)) or {"result": "success"}
+            with contextlib.redirect_stderr(io.StringIO()):
+                got = reopen_topic(who, "setup", topic)
+            if expected is None:
+                wanted_calls, wanted_id = [], None
+            else:
+                wanted_calls = [("PATCH", "/api/v1/messages/11",
+                                 {"topic": expected, "propagate_mode": "change_all"})]
+                wanted_id = 11
+            if got == wanted_id and seen == wanted_calls:
+                passed += 1
+            else:
+                failed += 1
+                print("FAIL reopen_topic(%r, %r) -> %r sent %r, wanted %r sent %r"
+                      % (who, topic, got, seen, wanted_id, wanted_calls))
+    finally:
+        globals()["_ready"] = old_ready
+        globals()["_topic_anchor_message"] = old_anchor
+        api.request, api.check = old_request, old_check
     for verb, who, should_refuse in cases.BRIDGE_ONLY_VERBS:
         stderr = io.StringIO()
         try:
