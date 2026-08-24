@@ -56,12 +56,15 @@ def _body():
     try:
         harness = json.loads(HARNESS_DEFAULTS_EXAMPLE_PATH.read_text())
         valid_rows = all(
-            isinstance(row, dict) and set(row) == {"model", "effort"}
+            isinstance(row, dict) and set(row) == {"model", "effort", "flags"}
             and isinstance(row["model"], str) and bool(row["model"])
             and row["effort"] in _EFFORT_SCALE
+            and isinstance(row["flags"], dict)
+            and all(isinstance(flag, str) and flag and isinstance(model, str) and model
+                    for flag, model in row["flags"].items())
             for row in harness.values()
         )
-        if set(harness) == {"codex", "agy", "opencode"} and valid_rows:
+        if set(harness) == {"claude", "codex", "agy", "opencode"} and valid_rows:
             passed += 1
         else:
             failed += 1
@@ -82,12 +85,13 @@ def _body():
         failed += 1
         print("FAIL model effort defaults example does not load: %s" % exc)
 
-    if set(MODEL_EFFORT_DEFAULTS) <= set(CLAUDE_MODELS):
+    claude_models = set(HARNESS_DEFAULTS["claude"]["flags"].values())
+    if set(MODEL_EFFORT_DEFAULTS) <= claude_models:
         passed += 1
     else:
         failed += 1
-        print("FAIL model effort defaults name models absent from CLAUDE_MODELS: %r" %
-              sorted(set(MODEL_EFFORT_DEFAULTS) - set(CLAUDE_MODELS)))
+        print("FAIL model effort defaults name models absent from Claude flags: %r" %
+              sorted(set(MODEL_EFFORT_DEFAULTS) - claude_models))
 
     try:
         rails = json.loads(RAILS_EXAMPLE_PATH.read_text())

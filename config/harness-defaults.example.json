@@ -1,5 +1,6 @@
 {
-  "codex": {"model": "gpt-5.6-sol", "effort": "high"},
-  "agy": {"model": "gemini-3.7-flash", "effort": "high"},
-  "opencode": {"model": "fireworks-ai/accounts/fireworks/models/deepseek-v4-pro", "effort": "high"}
+  "claude": {"model": "sonnet", "effort": "high", "flags": {"opus": "opus", "sonnet": "sonnet", "fable": "fable"}},
+  "codex": {"model": "gpt-5.6-sol", "effort": "high", "flags": {"sol": "gpt-5.6-sol", "terra": "gpt-5.6-terra"}},
+  "agy": {"model": "gemini-3.7-flash", "effort": "high", "flags": {}},
+  "opencode": {"model": "fireworks-ai/accounts/fireworks/models/deepseek-v4-pro", "effort": "high", "flags": {}}
 }

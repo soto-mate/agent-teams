@@ -70,8 +70,12 @@ def wake_provenance(prior, from_persona, in_loop):
 
 
 # A flag word is its vocabulary word with a dash: adding a model, effort level or provider is
-# one edit in constants.py or a config file, never a second one here.
-FLAG_TO_MODEL = {"-" + name: name for name in constants.CLAUDE_MODELS}
+# one edit in config, never a second one here.
+FLAG_TO_MODEL = {
+    "-" + flag: (provider, model)
+    for provider, row in constants.HARNESS_DEFAULTS.items()
+    for flag, model in row["flags"].items()
+}
 FLAG_TO_EFFORT = {"-" + level: level for level in constants.EFFORT_LEVELS}
 FLAG_TO_PROVIDER = {"-" + name: name for name in constants.PROVIDERS}
 FLAG_WORDS = tuple(FLAG_TO_MODEL) + tuple(FLAG_TO_EFFORT) + tuple(FLAG_TO_PROVIDER)
@@ -99,14 +103,20 @@ def flags_to_overrides(flags):
 
 
 def provider_for_wake(identity, flags, row, matrix=None):
-    """Last explicit provider, sticky lane, persona default, then Claude. Every persona supports
-    every provider, so a provider flag applies to any identity on the roster."""
+    """Last model flag, last explicit provider, sticky lane, then the persona default. Every
+    persona supports every provider, and a model flag implies its provider."""
     roster = matrix if matrix is not None else personas.PERSONAS
+    model_provider = None
     explicit = None
     for flag in flags:
+        flagged = FLAG_TO_MODEL.get(flag)
+        if flagged and identity in roster:
+            model_provider = flagged[0]
         candidate = FLAG_TO_PROVIDER.get(flag)
         if candidate and identity in roster:
             explicit = candidate
+    if model_provider:
+        return model_provider
     if explicit:
         return explicit
     if row:
@@ -117,8 +127,14 @@ def provider_for_wake(identity, flags, row, matrix=None):
 
 def resolve_wake_settings(identity, provider, model, effort, matrix=None):
     defaults = matrix[identity] if matrix is not None else constants.matrix_defaults(identity)
-    if provider == defaults["provider"]:
-        run_model = model if provider == "claude" and model else defaults["model"]
+    flag_provider, flag_model = model or (None, None)
+    if flag_model and provider != flag_provider:
+        log.info("model flag for provider %s dropped on %s wake", flag_provider, provider)
+        flag_model = None
+    if flag_model:
+        run_model = flag_model
+    elif provider == defaults["provider"]:
+        run_model = defaults["model"]
     elif provider == "codex":
         run_model = constants.CODEX_MODEL
     elif provider == "agy":
@@ -126,11 +142,11 @@ def resolve_wake_settings(identity, provider, model, effort, matrix=None):
     elif provider == "opencode":
         run_model = constants.OPENCODE_MODEL
     else:
-        run_model = model if provider == "claude" else None
+        run_model = None
     if effort:
         level = effort
-    elif provider == "claude" and model and model in constants.MODEL_EFFORT_DEFAULTS:
-        level = constants.MODEL_EFFORT_DEFAULTS[model]
+    elif provider == "claude" and flag_model in constants.MODEL_EFFORT_DEFAULTS:
+        level = constants.MODEL_EFFORT_DEFAULTS[flag_model]
     elif provider != defaults["provider"] and provider in constants.HARNESS_DEFAULTS:
         level = constants.HARNESS_DEFAULTS[provider]["effort"]
     else:

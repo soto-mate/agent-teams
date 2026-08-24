@@ -917,14 +917,23 @@ FLAG_PARSES = [
     ("-low go", (["-low"], "go")),
     ("-mid go", (["-mid"], "go")),
     ("-xtra go", (["-xtra"], "go")),
-    ("-fable draft this", ([], "-fable draft this")),
+    ("-fable draft this", (["-fable"], "draft this")),
     ("-sonnet go", (["-sonnet"], "go")),
+    ("-sol build this", (["-sol"], "build this")),
+    ("-terra build this", (["-terra"], "build this")),
     ("-codex build this", (["-codex"], "build this")),
     ("-claude take over", (["-claude"], "take over")),
     ("-agy spike this", (["-agy"], "spike this")),
     ("-opencode review this", (["-opencode"], "review this")),
     ("-codex -claude last wins", (["-codex", "-claude"], "last wins")),
     ("no dashes here -notaflag", ([], "no dashes here -notaflag")),
+]
+
+# (flags, expected model override and effort override) for listener.flags_to_overrides
+FLAG_OVERRIDES = [
+    (["-sol"], (("codex", "gpt-5.6-sol"), None)),
+    (["-terra", "-sol", "-low", "-high"], (("codex", "gpt-5.6-sol"), "high")),
+    (["-terra", "-opus"], (("claude", "opus"), None)),
 ]
 
 # (singular email, holder emails, API members, expected operator id, holder ids, mention)
@@ -964,6 +973,9 @@ PROVIDER_SELECTIONS = [
     ("thoth", [], {"provider": "codex", "session_id": "c"}, TEST_MATRIX, "codex"),
     ("thoth", [], {"session_id": "legacy"}, TEST_MATRIX, "claude"),
     ("bob", ["-codex"], {}, TEST_MATRIX, "codex"),
+    ("bob", ["-terra"], {}, TEST_MATRIX, "codex"),
+    ("bob", ["-terra", "-agy"], {}, TEST_MATRIX, "codex"),
+    ("bob", ["-terra", "-opus"], {}, TEST_MATRIX, "claude"),
     ("bob", ["-agy"], {}, TEST_MATRIX, "agy"),
     ("maat", ["-agy", "-claude", "-codex"], {}, TEST_MATRIX, "codex"),
     ("maat", [], {}, TEST_MATRIX, "opencode"),
@@ -975,10 +987,15 @@ PROVIDER_SELECTIONS = [
 # (identity, provider, model flag, effort flag, matrix, expected settings or exception)
 WAKE_SETTINGS = [
     ("thoth", "claude", None, None, TEST_MATRIX, (None, "high", "high")),
-    ("thoth", "claude", "sonnet", None, TEST_MATRIX, ("sonnet", "high", "high")),
-    ("thoth", "claude", "opus", None, TEST_MATRIX, ("opus", "high", "high")),
+    ("thoth", "claude", ("claude", "sonnet"), None, TEST_MATRIX,
+     ("sonnet", "high", "high")),
+    ("thoth", "claude", ("claude", "opus"), None, TEST_MATRIX,
+     ("opus", "high", "high")),
     ("thoth", "codex", None, None, TEST_MATRIX, ("gpt-5.6-sol", "high", "high")),
-    ("thoth", "codex", "opus", None, TEST_MATRIX, ("gpt-5.6-sol", "high", "high")),
+    ("thoth", "codex", ("claude", "opus"), None, TEST_MATRIX,
+     ("gpt-5.6-sol", "high", "high")),
+    ("thoth", "codex", ("codex", "gpt-5.6-terra"), None, TEST_MATRIX,
+     ("gpt-5.6-terra", "high", "high")),
     ("thoth", "codex", None, "low", TEST_MATRIX, ("gpt-5.6-sol", "low", "low")),
     ("maat", "opencode", None, None, TEST_MATRIX,
      ("fireworks-ai/accounts/fireworks/models/deepseek-v4-pro", "high", "high")),

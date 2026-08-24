@@ -102,10 +102,9 @@ _EFFORT_SCALE = {
     "xtra": {"claude": "xhigh", "codex": "xhigh", "opencode": "xhigh"},
 }
 
-# The fleet's vocabulary, one home each: the listener's flag words derive from these three.
+# The fleet's vocabulary, one home each: the listener's flag words derive from these configs.
 EFFORT_LEVELS = tuple(_EFFORT_SCALE)
-PROVIDERS = ("claude",) + tuple(HARNESS_DEFAULTS)  # claude is native, the rest are harnesses
-CLAUDE_MODELS = ("opus", "sonnet")
+PROVIDERS = tuple(HARNESS_DEFAULTS)
 
 
 def translate_effort(provider, level):
