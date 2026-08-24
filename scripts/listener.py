@@ -49,6 +49,26 @@ def is_persona_sender(sender_email, persona_emails):
     return bool(sender_email) and sender_email in persona_emails
 
 
+# A chain dies at ask plus answer: hop 0 is a human's tag, hop 1 the wake answering a persona's
+# question, and TERMINAL_HOP anything past it.
+TERMINAL_HOP = 2
+
+
+def wake_provenance(prior, from_persona, in_loop):
+    """(hop, ask, relay) for this wake: how deep the persona chain runs, whose tag-back survives
+    stripping, and whether every mention relays. prior is the store row for the triggering
+    message, None when the listener never posted it. A mid-wake `send.py --ask` post is exactly
+    that miss, and strips: its asker is sitting in `read.py --wait`, where a tag-back would race
+    its own lane. Loop topics strip whoever tags, asks there route through KICK."""
+    if in_loop:
+        return TERMINAL_HOP, None, False
+    if not from_persona:
+        return 0, None, True
+    if prior and prior.get("hop") == 0:
+        return 1, prior.get("persona"), False
+    return TERMINAL_HOP, None, False
+
+
 # A flag word is its vocabulary word with a dash: adding a model, effort level or provider is
 # one edit in constants.py or a config file, never a second one here.
 FLAG_TO_MODEL = {"-" + name: name for name in constants.CLAUDE_MODELS}
@@ -189,18 +209,28 @@ def _append_cost(persona, lane, result, model=None, level=None):
     store.cost_append(row)
 
 
-def _post_at_current_location(identity, message_id, channel, topic, body, footer="", relay=False):
+def _post_at_current_location(identity, message_id, channel, topic, body, footer="", relay=False,
+                              ask=None, hop=None):
     """Refetches the message's current channel/topic before posting, so a resolve or rename
     between wake and reply lands the reply inside the moved topic instead of forking an
     unresolved twin. handle_wake and handle_operator_tag shared this shape before extraction.
-    Returns (post_channel, post_topic) for callers that need the resolved location afterward."""
+    Returns (post_channel, post_topic) for callers that need the resolved location afterward.
+    A hop records the posted reply's provenance, so a persona woken by a mention inside it knows
+    whose question it answers; hop None does not record, for a post nothing can be woken by."""
     post_channel, post_topic = channel, topic
     try:
         cur = api.request(api.load(identity), "GET", "/api/v1/messages/%d" % message_id)
         post_channel, post_topic = _location_from_refetch(cur, channel, topic)
     except (Exception, SystemExit):
         log.exception("current-location refetch failed for message %s; using wake-time lane", message_id)
-    send_mod.post(identity, post_channel, post_topic, body, footer=footer, relay=relay)
+    posted = send_mod.post(identity, post_channel, post_topic, body, footer=footer, relay=relay,
+                           ask=ask)
+    if hop is not None:
+        try:
+            store.reply_add(posted, identity, hop)
+        except (Exception, SystemExit):
+            # The reply has landed; losing its provenance costs the next wake a tag-back, not this one.
+            log.exception("reply provenance write failed for message %s", posted)
     return post_channel, post_topic
 
 
@@ -380,9 +410,10 @@ def handle_wake(identity, event, flag_holder_ids, persona_emails=frozenset()):
     sender_id = msg.get("sender_id")
     content = msg.get("content", "")
     message_id = msg.get("id")
-    relay = not (
-        is_persona_sender(msg.get("sender_email"), persona_emails)
-        or loops.loop_for_lane(constants.BRIDGE_IDENTITY, stream_id, topic)
+    hop, ask, relay = wake_provenance(
+        store.reply_get(message_id),
+        is_persona_sender(msg.get("sender_email"), persona_emails),
+        bool(loops.loop_for_lane(constants.BRIDGE_IDENTITY, stream_id, topic)),
     )
 
     lane = store.lane_key(stream_id, topic, identity)
@@ -455,7 +486,7 @@ def handle_wake(identity, event, flag_holder_ids, persona_emails=frozenset()):
                     identity, message_id, channel, topic,
                     prompts.with_notice(result.reply, worktree_notice),
                     prompts.wake_footer(result.provider, run_model, run_level, result.session_id,
-                                        result.degraded), relay=relay)
+                                        result.degraded), relay=relay, ask=ask, hop=hop)
             except (Exception, SystemExit) as exc:
                 log.exception("wake failed for lane %s", lane)
                 # a failed wake leaves no resumable session: dropped before the note, so a post

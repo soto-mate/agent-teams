@@ -1425,6 +1425,22 @@ OPERATOR_DECISIONS = [
     ("KICK: JAN read the diffs", ("kick", "jan", "read the diffs")),
 ]
 
+# (prior reply row, sender is a persona, topic carries an open loop, expected (hop, ask, relay))
+# for listener.wake_provenance -- the whole chain in one table: a human tag relays, the wake
+# answering a hop-0 persona reply keeps exactly its asker's tag-back, and everything deeper,
+# every mid-wake --ask (a post the listener never recorded), and every loop topic strips
+WAKE_PROVENANCE = [
+    (None, False, False, (0, None, True)),
+    (None, False, True, (2, None, False)),
+    (None, True, False, (2, None, False)),
+    ({"persona": "archie", "hop": 0}, True, False, (1, "archie", False)),
+    ({"persona": "archie", "hop": 0}, True, True, (2, None, False)),
+    ({"persona": "bob", "hop": 1}, True, False, (2, None, False)),
+    ({"persona": "bob", "hop": 2}, True, False, (2, None, False)),
+    # a persona's own hop-0 reply, read back by a wake a human tagged: the human relays
+    ({"persona": "archie", "hop": 0}, False, False, (0, None, True)),
+]
+
 # (refetch payload, fallback channel, fallback topic, expected (channel, topic)) for
 # listener._location_from_refetch -- the refetch-fallback row: a failed refetch posts on the
 # wake-time lane rather than raising or forging a location
@@ -1660,8 +1676,10 @@ WAKE_HEADER_CONTAINS = [
     "Tagging a persona in your reply wakes it once",
     "send.py --ask <persona>",
     "read.py --wait --after <id> --from <persona> --for 300",
-    "If you need the answer to continue your work, ask and wait",
-    "A persona-triggered wake names who Mate should tag",
+    "If you need the answer to continue: ask and wait mid-wake",
+    "end your reply with the question and a tag; the answer re-wakes you",
+    "Answering a persona's question: end your reply by tagging the asker",
+    "Any other mention in a persona-triggered wake is stripped; name who Mate should tag",
 ]
 
 # (prompts attribute name, required substring): guards strings whose content no other table

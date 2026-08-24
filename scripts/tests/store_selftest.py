@@ -151,6 +151,28 @@ def _body():
         finally:
             inflight_clear(lane)
 
+    # reply provenance: newest ids win, the map stays bounded, and the whole probe runs in a
+    # temp STATE_DIR so no live replies.json is touched.
+    import constants as _constants
+    saved_cap, original_state_dir = _constants.REPLY_MAP_MAX, STATE_DIR
+    with TemporaryDirectory() as temp_dir:
+        globals()["STATE_DIR"] = Path(temp_dir)
+        try:
+            _constants.REPLY_MAP_MAX = 3
+            for message_id in (10, 11, 12, 13, 14):
+                reply_add(message_id, "archie", 0)
+            reply_add(15, "bob", 1)
+            kept = sorted(load("replies"), key=int)
+            newest, oldest = reply_get(15), reply_get(12)
+        finally:
+            _constants.REPLY_MAP_MAX = saved_cap
+            globals()["STATE_DIR"] = original_state_dir
+    if kept == ["13", "14", "15"] and newest == {"persona": "bob", "hop": 1} and oldest is None:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL reply map -> kept=%r newest=%r oldest=%r" % (kept, newest, oldest))
+
     # state_summary against probe ledgers; the live loops/inflight/cost/kicks files are never
     # named here, so a selftest run cannot disturb what the operator rails read.
     probe_names = [cases.STATE_PROBE_LOOPS, cases.STATE_PROBE_INFLIGHT,

@@ -247,6 +247,24 @@ def state_summary(now=None, day=None, loops_name="loops", inflight_name="infligh
     }
 
 
+# --- replies: whose question a persona wake is answering --------------------------------------
+
+def reply_add(message_id, persona, hop):
+    """Record a reply the listener posted, so the wake it triggers knows whose question it
+    answers and how deep the persona chain already runs. Kept to the newest REPLY_MAP_MAX ids:
+    ids are monotonic, and one old enough to fall off can no longer wake anyone."""
+    def fn(data):
+        data[str(int(message_id))] = {"persona": persona, "hop": int(hop)}
+        for stale in sorted(data, key=int)[:-constants.REPLY_MAP_MAX]:
+            data.pop(stale)
+
+    mutate("replies", fn)
+
+
+def reply_get(message_id):
+    return load("replies").get(str(message_id))
+
+
 # --- catch-up: last seen message id per identity ---------------------------------------------
 
 def seen_get(identity):

@@ -172,20 +172,35 @@ def _body():
             print("FAIL _location_from_refetch(%r, %r, %r) -> %r wanted %r" %
                   (payload, fallback_channel, fallback_topic, got, expected))
 
-    forwarded = []
-    saved_location = send_mod.post, api.load, api.request
+    for prior, from_persona, in_loop, expected in cases.WAKE_PROVENANCE:
+        got = wake_provenance(prior, from_persona, in_loop)
+        if got == expected:
+            passed += 1
+        else:
+            failed += 1
+            print("FAIL wake_provenance(%r, %r, %r) -> %r wanted %r" %
+                  (prior, from_persona, in_loop, got, expected))
+
+    # relay and ask reach the post, and the posted id is what provenance is recorded against:
+    # recording the trigger id instead would tag the wrong asker back.
+    forwarded, recorded = [], []
+    saved_location = send_mod.post, api.load, api.request, store.reply_add
     try:
-        send_mod.post = lambda *a, **k: forwarded.append((a, k))
+        send_mod.post = lambda *a, **k: forwarded.append((a, k)) or 4242
         api.load = lambda identity: identity
         api.request = lambda *a, **k: {"result": "error"}
+        store.reply_add = lambda *a: recorded.append(a)
         _post_at_current_location("bob", 9, "c", "t", "reply", relay=True)
+        _post_at_current_location("bob", 9, "c", "t", "reply", ask="archie", hop=1)
     finally:
-        send_mod.post, api.load, api.request = saved_location
-    if forwarded and forwarded[0][1].get("relay") is True:
+        send_mod.post, api.load, api.request, store.reply_add = saved_location
+    if [k.get("relay") for _, k in forwarded] == [True, False] \
+            and [k.get("ask") for _, k in forwarded] == [None, "archie"] \
+            and recorded == [(4242, "bob", 1)]:
         passed += 1
     else:
         failed += 1
-        print("FAIL current-location post dropped relay -> %r" % forwarded)
+        print("FAIL current-location post relay/ask/provenance -> %r %r" % (forwarded, recorded))
 
     for exc, expected in cases.FAILURE_REASONS:
         got = _failure_reason(exc)
@@ -522,15 +537,15 @@ def _body():
             print("FAIL %s selected flags %r logs=%r wanted %r log=%r" %
                   (label, selected_flags, capture.messages, expected_flags, log_substring))
 
-    # The caller computes one-hop relay from the sender and wake-time loop, then passes it to
-    # the final post. Three rows pin the whole truth table.
+    # The caller reads the trigger's provenance, then passes relay, ask and hop to the final
+    # post. Four rows pin the whole truth table, the answer wake included.
     relay_posts = []
     memory_commits = []
     loop_open = False
     saved_relay = (
         runner.run, runner.wake_cwd, send_mod.react, build_delta_record, provider_for_wake,
         resolve_wake_settings, loops.loop_for_lane, store.inflight_add, store.inflight_clear,
-        store.lane_lock, store.session_get, store.session_set, store.mutate, _append_cost,
+        store.lane_lock, store.session_get, store.session_set, store.mutate, store.reply_get, _append_cost,
         _post_at_current_location, refresh_topic_digest, handle_rail_a, progress_sweep,
         monitor.update_board, log.disabled, commit_memory,
     )
@@ -549,8 +564,10 @@ def _body():
         store.session_get = lambda *a, **k: None
         store.session_set = lambda *a, **k: None
         store.mutate = lambda *a, **k: None
+        store.reply_get = lambda message_id: {"persona": "archie", "hop": 0} if message_id == 73 else None
         globals()["_append_cost"] = lambda *a, **k: None
-        globals()["_post_at_current_location"] = lambda *a, **k: relay_posts.append(k["relay"]) or ("c", "t")
+        globals()["_post_at_current_location"] = (
+            lambda *a, **k: relay_posts.append((k["relay"], k["ask"], k["hop"])) or ("c", "t"))
         globals()["refresh_topic_digest"] = lambda *a, **k: None
         globals()["handle_rail_a"] = lambda *a, **k: None
         globals()["progress_sweep"] = lambda *a, **k: None
@@ -558,7 +575,7 @@ def _body():
         monitor.update_board = lambda *a, **k: None
         for index, (sender_email, open_loop) in enumerate([
                 ("persona@example.com", False), ("mate@example.com", True),
-                ("mate@example.com", False)]):
+                ("mate@example.com", False), ("persona@example.com", False)]):
             loop_open = open_loop
             handle_wake(
                 "bob", {"message": {"stream_id": "selftest-relay-%d" % index,
@@ -574,18 +591,20 @@ def _body():
         loops.loop_for_lane = saved_relay[6]
         store.inflight_add, store.inflight_clear = saved_relay[7:9]
         store.lane_lock, store.session_get, store.session_set, store.mutate = saved_relay[9:13]
-        globals()["_append_cost"], globals()["_post_at_current_location"] = saved_relay[13:15]
-        globals()["refresh_topic_digest"], globals()["handle_rail_a"] = saved_relay[15:17]
-        globals()["progress_sweep"] = saved_relay[17]
-        monitor.update_board, log.disabled = saved_relay[18:20]
-        globals()["commit_memory"] = saved_relay[20]
-    if relay_posts == [False, False, True]:
+        store.reply_get = saved_relay[13]
+        globals()["_append_cost"], globals()["_post_at_current_location"] = saved_relay[14:16]
+        globals()["refresh_topic_digest"], globals()["handle_rail_a"] = saved_relay[16:18]
+        globals()["progress_sweep"] = saved_relay[18]
+        monitor.update_board, log.disabled = saved_relay[19:21]
+        globals()["commit_memory"] = saved_relay[21]
+    wanted_relay = [(False, None, 2), (False, None, 2), (True, None, 0), (False, "archie", 1)]
+    if relay_posts == wanted_relay:
         passed += 1
     else:
         failed += 1
-        print("FAIL wake relay truth table -> %r wanted [False, False, True]" % relay_posts)
+        print("FAIL wake relay truth table -> %r wanted %r" % (relay_posts, wanted_relay))
     # Driven at the call site: a memory commit helper is worth nothing if no wake calls it.
-    if memory_commits == ["bob", "bob", "bob"]:
+    if memory_commits == ["bob", "bob", "bob", "bob"]:
         passed += 1
     else:
         failed += 1
