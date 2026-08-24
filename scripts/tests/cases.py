@@ -401,8 +401,8 @@ INFLIGHT_GUARDED_CLEARS = [
     ("bare clear", None, False),
 ]
 
-# (persona, model, session, effort, expected argv) for runner._build_cmd. No argv holds the
-# brief any more: every harness reads it off stdin.
+# (persona, model, session, effort, MCP config, expected argv) for runner._build_cmd.
+# No argv holds the brief any more: every harness reads it off stdin.
 FAILURE_OUTPUTS = [
     ("", '{"error":"quota"}\n', '{"error":"quota"}'),
     (" warning\n", " detail\n", "warning\ndetail"),
@@ -411,24 +411,33 @@ FAILURE_OUTPUTS = [
 
 
 RUNNER_CMDS = [
-    ("peter", None, None, None,
+    ("peter", None, None, None, None,
      ["claude", "-p", "--dangerously-skip-permissions",
       "--output-format", "stream-json", "--verbose", "--agent", "peter"]),
-    ("bob", "sonnet", None, None,
+    ("bob", "sonnet", None, None, Path("/tmp/playwright.json"),
      ["claude", "-p", "--dangerously-skip-permissions",
-      "--output-format", "stream-json", "--verbose", "--agent", "bob", "--model", "sonnet"]),
-    ("archie", "sonnet", "sid-123", "high",
+      "--output-format", "stream-json", "--verbose", "--agent", "bob",
+      "--mcp-config", "/tmp/playwright.json", "--model", "sonnet"]),
+    ("archie", "sonnet", "sid-123", "high", None,
      ["claude", "-p", "--dangerously-skip-permissions",
       "--output-format", "stream-json", "--verbose", "--agent", "archie",
       "--model", "sonnet", "--resume", "sid-123", "--effort", "high"]),
-    ("eve", None, "sid-9", None,
+    ("eve", None, "sid-9", None, None,
      ["claude", "-p", "--dangerously-skip-permissions",
       "--output-format", "stream-json", "--verbose", "--agent", "eve", "--resume", "sid-9"]),
 ]
 
+MCP_SERVERS = {
+    "playwright": {
+        "command": "/usr/local/bin/npx",
+        "args": ["-y", "@playwright/mcp@latest"],
+        "env": {"PATH": "/usr/local/bin:/usr/bin"},
+    },
+}
+
 CODEX_RUNNER_CMDS = [
     (
-        "gpt-5.6-sol", None, "high", "/tmp/final.txt",
+        "gpt-5.6-sol", None, "high", "/tmp/final.txt", MCP_SERVERS,
         [
             "/Applications/ChatGPT.app/Contents/Resources/codex", "exec",
             "--json", "--strict-config",
@@ -436,11 +445,14 @@ CODEX_RUNNER_CMDS = [
             "-c", "features.memories=false",
             "-c", 'sandbox_mode="danger-full-access"',
             "-c", 'model_reasoning_effort="high"',
+            "-c", 'mcp_servers.playwright.command="/usr/local/bin/npx"',
+            "-c", 'mcp_servers.playwright.args=["-y", "@playwright/mcp@latest"]',
+            "-c", 'mcp_servers.playwright.env.PATH="/usr/local/bin:/usr/bin"',
             "-m", "gpt-5.6-sol", "-o", "/tmp/final.txt",
         ],
     ),
     (
-        "gpt-5.6-sol", "019ffcaf-probe", "medium", "/tmp/resume.txt",
+        "gpt-5.6-sol", "019ffcaf-probe", "medium", "/tmp/resume.txt", MCP_SERVERS,
         [
             "/Applications/ChatGPT.app/Contents/Resources/codex", "exec", "resume",
             "--json", "--strict-config",
@@ -448,11 +460,25 @@ CODEX_RUNNER_CMDS = [
             "-c", "features.memories=false",
             "-c", 'sandbox_mode="danger-full-access"',
             "-c", 'model_reasoning_effort="medium"',
+            "-c", 'mcp_servers.playwright.command="/usr/local/bin/npx"',
+            "-c", 'mcp_servers.playwright.args=["-y", "@playwright/mcp@latest"]',
+            "-c", 'mcp_servers.playwright.env.PATH="/usr/local/bin:/usr/bin"',
             "-m", "gpt-5.6-sol", "-o", "/tmp/resume.txt",
             "019ffcaf-probe",
         ],
     ),
 ]
+
+OPENCODE_MCP_CONFIG = {
+    "mcp": {
+        "playwright": {
+            "type": "local",
+            "command": ["/usr/local/bin/npx", "-y", "@playwright/mcp@latest"],
+            "enabled": True,
+            "environment": {"PATH": "/usr/local/bin:/usr/bin"},
+        },
+    },
+}
 
 # (provider, --model value, --effort value, fragments the built command must contain) for
 # runner.run: a hand-driven run that omits either flag takes the harness default instead of

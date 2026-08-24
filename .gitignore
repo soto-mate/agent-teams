@@ -4,7 +4,7 @@ __pycache__/
 *.pyc
 .venv
 .DS_Store
-.mcp.json
+mcps/playwright.json
 .playwright-mcp/
 .private/
 memory/
