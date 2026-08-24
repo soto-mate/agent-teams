@@ -156,6 +156,19 @@ def _strip_and_guard(text, as_name, relay=False, ask=None):
     return text
 
 
+def _reopen_resolved_counterpart(as_name, channel, topic, enforce=True):
+    """A post to an open topic name whose resolved twin is live in the channel reopens the twin
+    and posts into it, instead of splitting the session across a duplicate un-prefixed topic
+    (Chella, 2026-08-24). Status channels are skipped: their topics are never resolved, and
+    reopen_topic refuses them outright."""
+    if store.is_resolved(topic) or status_channel(channel):
+        return None
+    resolved = constants.RESOLVED_PREFIX + " " + topic
+    if _topic_anchor_message(as_name, channel, resolved) is None:
+        return None
+    return reopen_topic(as_name, channel, resolved, enforce=enforce)
+
+
 def post(as_name, stream, topic, body, files=(), footer="", enforce=True, relay=False, ask=None):
     cfg = _ready(as_name, enforce)
     body, accepted = _extract(body or "", files)
@@ -169,6 +182,7 @@ def post(as_name, stream, topic, body, files=(), footer="", enforce=True, relay=
     sid = api.stream_id(as_name, stream)
     if sid is None:
         api.refuse_narrow_miss(as_name, stream)
+    _reopen_resolved_counterpart(as_name, stream, topic, enforce=enforce)
     payload = api.check(
         api.request(
             cfg,
@@ -324,7 +338,7 @@ def resolve_topic(as_name, channel, topic):
     return message_id
 
 
-def reopen_topic(as_name, channel, topic):
+def reopen_topic(as_name, channel, topic, enforce=True):
     """Strip the ✔ prefix, propagate_mode change_all, the inverse of resolve_topic. Open to every
     identity: the seat holding new inbound is the one that knows the session is live again. A
     topic that is already open is a no-op, and returns None without an API call."""
@@ -332,7 +346,7 @@ def reopen_topic(as_name, channel, topic):
     if not store.is_resolved(topic):
         sys.stderr.write(prompts.TOPIC_ALREADY_OPEN.format(channel=channel, topic=topic) + "\n")
         return None
-    cfg = _ready(as_name)
+    cfg = _ready(as_name, enforce)
     message_id = _topic_anchor_or_refuse(as_name, channel, topic)
     api.check(
         api.request(cfg, "PATCH", "/api/v1/messages/%d" % message_id,

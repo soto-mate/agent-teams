@@ -47,9 +47,11 @@ def _body():
     # The post door applies relay and ask before the API call.
     old_ready, old_window, old_request, old_check, old_sid = (
         _ready, api.window, api.request, api.check, api.stream_id)
+    old_anchor = _topic_anchor_message
     sent = []
     try:
         globals()["_ready"] = lambda as_name, enforce=True: {"name": as_name}
+        globals()["_topic_anchor_message"] = lambda as_name, channel, topic: None
         api.window = lambda as_name: 10000
         api.stream_id = lambda name, channel: 7
         api.request = lambda cfg, method, path, params: sent.append(params["content"]) or {"id": 9}
@@ -63,6 +65,7 @@ def _body():
         ]
     finally:
         globals()["_ready"] = old_ready
+        globals()["_topic_anchor_message"] = old_anchor
         api.window, api.request, api.check, api.stream_id = old_window, old_request, old_check, old_sid
     if got == [9, 9, 9] and sent == ["@" + ZWSP + mention[1:], mention, mention]:
         passed += 1
@@ -233,6 +236,40 @@ def _body():
         globals()["_ready"] = old_ready
         globals()["_topic_anchor_message"] = old_anchor
         api.request, api.check = old_request, old_check
+    # Auto-reopen is wired inside post, so the row drives the real post with the API stubbed and
+    # reads back the whole call sequence: the reopen PATCH must land before the POST.
+    old_ready, old_request, old_check = _ready, api.request, api.check
+    old_anchor, old_sid, old_window = _topic_anchor_message, api.stream_id, api.window
+    try:
+        globals()["_ready"] = lambda as_name, enforce=True: {"name": as_name}
+        api.stream_id = lambda as_name, channel: 7
+        api.window = lambda as_name: 10000
+        api.check = lambda payload, what: payload
+        for channel, topic, twin, expected in cases.AUTO_REOPEN_POSTS:
+            seen = []
+            globals()["_topic_anchor_message"] = (
+                lambda as_name, ch, tp, twin=twin: 11 if twin else None)
+            api.request = lambda cfg, m, path, params, seen=seen: seen.append(
+                (m, path, params)) or {"result": "success", "id": 99}
+            with contextlib.redirect_stderr(io.StringIO()):
+                got = post("eve", channel, topic, "hello")
+            wanted = []
+            if expected is not None:
+                wanted.append(("PATCH", "/api/v1/messages/11",
+                               {"topic": store.normalize_topic(expected),
+                                "propagate_mode": "change_all"}))
+            wanted.append(("POST", "/api/v1/messages",
+                           {"type": "stream", "to": 7, "topic": topic, "content": "hello"}))
+            if got == 99 and seen == wanted:
+                passed += 1
+            else:
+                failed += 1
+                print("FAIL post(%r, %r) sent %r, wanted %r" % (channel, topic, seen, wanted))
+    finally:
+        globals()["_ready"] = old_ready
+        globals()["_topic_anchor_message"] = old_anchor
+        api.request, api.check = old_request, old_check
+        api.stream_id, api.window = old_sid, old_window
     for verb, who, should_refuse in cases.BRIDGE_ONLY_VERBS:
         stderr = io.StringIO()
         try:

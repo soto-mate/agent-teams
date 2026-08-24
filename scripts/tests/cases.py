@@ -366,6 +366,17 @@ REOPEN_TOPICS = [
     ("bob", "", None),
 ]
 
+# (channel, topic, resolved twin is live, expected name reopened or None) for send.post's
+# auto-reopen. A post to an open name whose ✔ twin exists reopens the twin instead of splitting
+# the session; a topic already carrying the ✔, and any status channel, are no-ops.
+AUTO_REOPEN_POSTS = [
+    ("setup", "Co / Person / subject", True, constants.RESOLVED_PREFIX + " Co / Person / subject"),
+    ("setup", "Co / Person / subject", False, None),
+    ("setup", constants.RESOLVED_PREFIX + " Co / Person / subject", True, None),
+    (constants.STATUS_STREAM, "Co / Person / subject", True, None),
+    (constants.DOMAIN_STATUS_CHANNEL.format(channel="money"), "Co / Person / subject", True, None),
+]
+
 # (verb, channel, should refuse) for send._refuse_status_channel. Archive and rename take the
 # lane away; a description edit does not and is not in this table.
 STATUS_CHANNEL_GUARD = [
