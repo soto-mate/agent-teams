@@ -73,6 +73,66 @@ def _body():
     else:
         failed += 1
         print("FAIL PATCH request transport -> %r payload=%r" % (captured, payload))
+
+    import urllib.error
+
+    cfg = {"site": "https://example", "email": "bot@example", "key": "secret"}
+    old_delay = constants.API_RETRY_DELAY_S
+    constants.API_RETRY_DELAY_S = 0
+    try:
+        calls = []
+
+        def flaky(req, timeout):
+            calls.append(1)
+            if len(calls) <= constants.API_RETRIES:
+                raise urllib.error.URLError("handshake operation timed out")
+            return _Response()
+
+        got = request(cfg, "POST", "/api/v1/messages", {"content": "x"}, open_fn=flaky)
+        if got == {"result": "success"} and len(calls) == constants.API_RETRIES + 1:
+            passed += 1
+        else:
+            failed += 1
+            print("FAIL pre-send URLError retry -> %r after %d calls" % (got, len(calls)))
+
+        calls = []
+
+        def refused(req, timeout):
+            calls.append(1)
+            raise urllib.error.URLError("connection refused")
+
+        try:
+            request(cfg, "GET", "/api/v1/messages", open_fn=refused)
+            exited = False
+        except SystemExit:
+            exited = True
+        if exited and len(calls) == constants.API_RETRIES + 1:
+            passed += 1
+        else:
+            failed += 1
+            print("FAIL exhausted retries -> exited=%s after %d calls" % (exited, len(calls)))
+
+        calls = []
+
+        def read_timeout(req, timeout):
+            calls.append(1)
+            raise TimeoutError("timed out")
+
+        try:
+            request(cfg, "POST", "/api/v1/messages", {"content": "x"}, open_fn=read_timeout)
+            raised = False
+        except TimeoutError:
+            raised = True
+        except SystemExit:
+            raised = False
+        if raised and len(calls) == 1:
+            passed += 1
+        else:
+            failed += 1
+            print("FAIL post-send timeout not retried -> raised=%s after %d calls"
+                  % (raised, len(calls)))
+    finally:
+        constants.API_RETRY_DELAY_S = old_delay
     for asked, env, embassies, should_exit in cases.IDENTITY:
         before = os.environ.get("AGENT_TEAM_IDENTITY")
         before_embassies = constants.EMBASSIES
