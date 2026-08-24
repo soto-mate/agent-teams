@@ -25,6 +25,8 @@ DOMAINS_PATH = REPO_DIR / "config" / "domains.json"
 DOMAINS_EXAMPLE_PATH = REPO_DIR / "config" / "domains.example.json"
 STATUS_PATH = REPO_DIR / "config" / "status.json"
 STATUS_EXAMPLE_PATH = REPO_DIR / "config" / "status.example.json"
+EMBASSIES_PATH = REPO_DIR / "config" / "embassies.json"
+EMBASSIES_EXAMPLE_PATH = REPO_DIR / "config" / "embassies.example.json"
 
 
 def _load_json_object(path, example_path, label):
@@ -80,6 +82,10 @@ def _load_status():
     return _load_json_object(STATUS_PATH, STATUS_EXAMPLE_PATH, "status")
 
 
+def _load_embassies():
+    return _load_json_object(EMBASSIES_PATH, EMBASSIES_EXAMPLE_PATH, "embassies")
+
+
 _MATRIX = _load_matrix()
 HARNESS_DEFAULTS = _load_harness_defaults()
 MODEL_EFFORT_DEFAULTS = _load_model_effort_defaults()
@@ -87,6 +93,7 @@ _RAILS = _load_rails()
 _CHANNELS = _load_channels()
 _DOMAINS = _load_domains()
 _STATUS = _load_status()
+EMBASSIES = _load_embassies()
 
 _EFFORT_SCALE = {
     "low": {"claude": "low", "codex": "low", "opencode": "low", "agy": "low"},

@@ -45,9 +45,9 @@ def load(name):
 
 
 def enforce_identity(as_name):
-    """Inside a wake, --as must equal AGENT_TEAM_IDENTITY or exit 2."""
+    """Inside a wake, --as must be its identity or declared embassy, else exit 2."""
     actual = os.environ.get("AGENT_TEAM_IDENTITY")
-    if actual and actual != as_name:
+    if actual and actual != as_name and constants.EMBASSIES.get(actual) != as_name:
         sys.stderr.write(prompts.IDENTITY_MISMATCH.format(asked=as_name, actual=actual) + "\n")
         raise SystemExit(2)
 

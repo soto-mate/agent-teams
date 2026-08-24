@@ -64,12 +64,14 @@ PATCH_REQUEST_EXPECTED = {
     "timeout": 60,
 }
 
-# (as_name, AGENT_TEAM_IDENTITY or None, should exit 2) for api.enforce_identity
+# (as_name, AGENT_TEAM_IDENTITY or None, embassies, should exit 2) for api.enforce_identity
 IDENTITY = [
-    ("archie", None, False),
-    ("archie", "archie", False),
-    ("archie", "eve", True),
-    ("bridge", "bridge", False),
+    ("archie", None, {}, False),
+    ("archie", "archie", {}, False),
+    ("archie", "eve", {}, True),
+    ("bridge", "bridge", {}, False),
+    ("archie-embassy", "archie", {"archie": "archie-embassy"}, False),
+    ("other-embassy", "archie", {"archie": "archie-embassy"}, True),
 ]
 
 # (GET topics response, expected topic rows) for api.topics
