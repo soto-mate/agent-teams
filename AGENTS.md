@@ -25,7 +25,8 @@ a topic is an open session, resolving it ends the session, reopening starts fres
 topics are the exception, they are never resolved. The flags -opus -sonnet -low -mid -high
 -xtra -claude -codex -agy -opencode parse only off configured flag holders.
 A persona mention wakes that persona once; a persona-triggered wake and any wake in a loop topic
-post with mentions stripped; mid-wake asks go through `send.py --ask` and `read.py --wait`.
+post with mentions stripped; a wake answering a persona's final-reply question tags that persona
+back once; deeper replies strip; mid-wake asks go through `send.py --ask` and `read.py --wait`.
 A wake that finds its resource held by another wake reports blocked and ends; it never sleeps
 on it; it kills only pids it started.
 
