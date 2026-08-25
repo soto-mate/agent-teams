@@ -119,26 +119,12 @@ def _body():
         print("FAIL rails example does not load: %s" % exc)
 
     try:
-        channels = json.loads(CHANNELS_EXAMPLE_PATH.read_text())
-        valid_rows = all(
-            isinstance(names, list) and names
-            and all(isinstance(name, str) and name for name in names)
-            for names in channels.values())
-        if channels and valid_rows:
-            passed += 1
-        else:
-            failed += 1
-            print("FAIL channels example is empty or its groups are invalid")
-    except (OSError, ValueError) as exc:
-        failed += 1
-        print("FAIL channels example does not load: %s" % exc)
-
-    try:
         domains = json.loads(DOMAINS_EXAMPLE_PATH.read_text())
-        # empty is the shipped default: a fresh estate maps no channel, so no wake is told
-        # about a domain root that does not exist on that machine.
+        # "" is the shipped default: a fresh estate's prefix is on the board from its first
+        # sweep, and no wake is told about a root that does not exist on that machine.
         valid_rows = all(
-            isinstance(root, str) and root.startswith("/") for root in domains.values())
+            isinstance(root, str) and (root == "" or root.startswith("/"))
+            for root in domains.values())
         if valid_rows:
             passed += 1
         else:
@@ -247,22 +233,23 @@ def _body():
             failed += 1
             print("FAIL board_state_key(%r) -> %r wanted %r" % (section, got, expected))
 
-    # every group in the live channels config has a section, or the board KeyErrors on refresh
-    if BOARD_SECTIONS == ("activity",) + tuple(g.casefold() for g, _ in BOARD_GROUPS):
+    # every prefix in the live domains config has a section, or the board KeyErrors on refresh
+    if BOARD_SECTIONS == ("activity",) + tuple(p.casefold() for p in _DOMAINS):
         passed += 1
     else:
         failed += 1
-        print("FAIL BOARD_SECTIONS %r does not follow BOARD_GROUPS %r" %
-              (BOARD_SECTIONS, BOARD_GROUPS))
+        print("FAIL BOARD_SECTIONS %r does not follow the domains config %r" %
+              (BOARD_SECTIONS, tuple(_DOMAINS)))
 
-    for config, expected in cases.CHANNEL_GROUPS:
-        groups = board_groups(config)
-        flat = {channel for names in config.values() for channel in names}
+    for config, streams, expected in cases.CHANNEL_GROUPS:
+        groups = board_groups(streams, config)
+        flat = {channel for _, names in expected for channel in names}
         if groups == expected and board_channels(groups) == flat:
             passed += 1
         else:
             failed += 1
-            print("FAIL board_groups(%r) -> %r wanted %r" % (config, groups, expected))
+            print("FAIL board_groups(%r, %r) -> %r wanted %r" %
+                  (streams, config, groups, expected))
 
     for role, expected in cases.WORKTREE_ROLES:
         got = worktree_roles(role, cases.WORKTREE_ROLE_MATRIX)

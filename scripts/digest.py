@@ -210,8 +210,10 @@ def sweep_once(as_name=constants.BRIDGE_IDENTITY, streams_fn=None, stream_id_fn=
     cached = load_fn("digests")
     parked = load_fn(constants.PARKED_STATE)
     refreshed = []
-    board_channels = constants.board_channels(groups)
-    for channel in streams_fn(as_name):
+    streams = streams_fn(as_name)
+    board_channels = constants.board_channels(
+        constants.board_groups(streams) if groups is None else groups)
+    for channel in streams:
         if channel not in board_channels:
             continue
         stream_id = stream_id_fn(as_name, channel)

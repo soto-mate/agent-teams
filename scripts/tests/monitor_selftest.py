@@ -25,8 +25,11 @@ def _body():
     import tests.cases as cases
 
     passed = failed = 0
-    render_groups = (("Workshop", ("setup",)), ("Domains", ("maintenance",)))
-    topic_groups = (("Workshop", ("status", "setup")),)
+    # groups come from a fixture stream list through the real derivation, never from the live
+    # domains.json: this estate's map is gitignored and its prefixes are nobody else's
+    render_groups = constants.board_groups(
+        ["setup", "maintenance", "unlisted-channel"], {"setup": "", "maintenance": ""})
+    topic_groups = (("workshop", ("status", "setup")),)
     try:
         store.inflight_all()
         _ledger_rows("cost")
@@ -101,7 +104,7 @@ def _body():
     rendered_groups = []
     try:
         globals()["_loop_todos"] = lambda as_name: []
-        globals()["_topic_todos"] = lambda as_name, now_ts=None, groups=None: \
+        globals()["_topic_todos"] = lambda as_name, now_ts=None, groups=None, streams=None: \
             rendered_groups.append(groups) or []
         render_board([], {}, digests={}, parked=[], groups=render_groups)
     finally:
@@ -123,17 +126,18 @@ def _body():
         print("FAIL parked render lost its spoiler, link, or live lane")
     combined_parts = board_parts(
         10000, cases.BOARD_RENDER_LANES, got, cases.BOARD_RENDER_TOPICS,
-        cases.BOARD_RENDER_DIGESTS, now_ts=200000)
+        cases.BOARD_RENDER_DIGESTS, now_ts=200000, groups=render_groups)
     split_parts = board_parts(
         1, cases.BOARD_RENDER_LANES, got, cases.BOARD_RENDER_TOPICS,
-        cases.BOARD_RENDER_DIGESTS, now_ts=200000)
-    # against BOARD_SECTIONS, not a literal list: channels.json is gitignored, so a hardcoded
-    # group list is green in CI against the example and red on any estate that added a group
+        cases.BOARD_RENDER_DIGESTS, now_ts=200000, groups=render_groups)
+    # the fixture's own prefixes, not the live config: domains.json is gitignored, so a board
+    # asserted against this estate's map is red on every other one
+    fixture_sections = ("activity",) + tuple(prefix for prefix, _ in render_groups)
     default_board = render_board(
         cases.BOARD_RENDER_LANES, got, cases.BOARD_RENDER_TOPICS,
-        cases.BOARD_RENDER_DIGESTS, now_ts=200000, groups=constants.BOARD_GROUPS)
+        cases.BOARD_RENDER_DIGESTS, now_ts=200000, groups=render_groups)
     if combined_parts == {"activity": default_board} \
-            and tuple(split_parts) == constants.BOARD_SECTIONS:
+            and tuple(split_parts) == fixture_sections:
         passed += 1
     else:
         failed += 1
@@ -187,7 +191,7 @@ def _body():
         "bob", stream_id_fn=lambda as_name, channel: 7 if channel == "setup" else None,
         topics_fn=lambda as_name, stream_id: cases.PARK_API_TOPICS,
         load_fn=lambda as_name: {"site": "https://example"},
-        groups=(("Workshop", ("setup",)),))
+        groups=(("workshop", ("setup",)),))
     if unresolved == cases.PARK_API_EXPECTED:
         passed += 1
     else:

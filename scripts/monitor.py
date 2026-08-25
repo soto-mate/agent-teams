@@ -171,13 +171,15 @@ def _todo_key(row):
 
 
 def unresolved_topics(as_name=constants.BRIDGE_IDENTITY, stream_id_fn=None,
-                      topics_fn=None, load_fn=None, groups=None):
+                      topics_fn=None, load_fn=None, groups=None, streams_fn=None):
     stream_id_fn = stream_id_fn or api.stream_id
     topics_fn = topics_fn or api.topics
     load_fn = load_fn or api.load
     cfg = load_fn(as_name)
     rows = []
-    for _, channels in constants.BOARD_GROUPS if groups is None else groups:
+    if groups is None:
+        groups = constants.board_groups((streams_fn or api.visible_streams)(as_name))
+    for _, channels in groups:
         for channel in channels:
             stream_id = stream_id_fn(as_name, channel)
             if stream_id is None:
@@ -266,13 +268,15 @@ def _loop_todos(as_name):
     return rows
 
 
-def _topic_todos(as_name, now_ts=None, groups=None):
+def _topic_todos(as_name, now_ts=None, groups=None, streams=None):
     now_ts = time.time() if now_ts is None else now_ts
     cutoff = now_ts - constants.BOARD_TOPIC_DAYS * 24 * 60 * 60
     cfg = api.load(as_name)
     rows = []
-    board_channels = constants.board_channels(groups)
-    for channel in api.visible_streams(as_name):
+    streams = api.visible_streams(as_name) if streams is None else streams
+    board_channels = constants.board_channels(
+        constants.board_groups(streams) if groups is None else groups)
+    for channel in streams:
         if channel not in board_channels:
             continue
         stream_id = api.stream_id(as_name, channel)
@@ -376,9 +380,12 @@ def _board_sections(lanes=None, persona_rows=None, todos=None, digests=None,
     now_ts = time.time() if now_ts is None else now_ts
     lanes = lane_rows() if lanes is None else lanes
     persona_rows = snapshot() if persona_rows is None else persona_rows
+    streams = api.visible_streams(as_name) if groups is None else None
+    groups = constants.board_groups(streams) if groups is None else groups
     supplied_todos = todos is not None
     if todos is None:
-        todos = merge_todos(_loop_todos(as_name), _topic_todos(as_name, groups=groups))
+        todos = merge_todos(
+            _loop_todos(as_name), _topic_todos(as_name, groups=groups, streams=streams))
     if parked is None:
         parked = [] if supplied_todos else parked_topics(as_name)
     digests = store.load("digests") if digests is None else digests
@@ -393,7 +400,7 @@ def _board_sections(lanes=None, persona_rows=None, todos=None, digests=None,
         if digest.digest_key(row.get("stream_id"), row.get("name")) not in parked_keys
     }
     sections = [("activity", render_activity(persona_rows))]
-    for group, channels in constants.BOARD_GROUPS if groups is None else groups:
+    for group, channels in groups:
         group_lines = []
         for channel in channels:
             channel_topics = [row for (name, _), row in topic_map.items() if name == channel]
@@ -421,8 +428,9 @@ def _board_sections(lanes=None, persona_rows=None, todos=None, digests=None,
 
 def board_parts(limit, lanes=None, persona_rows=None, todos=None, digests=None,
                 as_name=constants.BRIDGE_IDENTITY, now_ts=None, force_split=False,
-                parked=None):
-    sections = _board_sections(lanes, persona_rows, todos, digests, as_name, now_ts, parked)
+                parked=None, groups=None):
+    sections = _board_sections(
+        lanes, persona_rows, todos, digests, as_name, now_ts, parked, groups)
     combined = "\n\n".join(content for _, content in sections)
     if not force_split and len(combined) <= limit:
         return {"activity": combined}
