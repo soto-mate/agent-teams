@@ -132,21 +132,19 @@ An install retaining a nondefault launchd label also sets `AGENT_TEAM_LAUNCHD_LA
 `BRIDGE_IDENTITY` renames the bridge seat inside the scripts only: an estate that sets it also
 renames `.agents/agents/bridge.md`, its zuliprc and its Zulip bot to match.
 
-Render the launchd template from the repository root:
+Render the launchd template from the repository root into `~/Library/LaunchAgents`, naming the
+file after the label (`AGENT_TEAM_LAUNCHD_LABEL` if the install sets one):
 
 ```sh
 repo_dir=$(pwd -P)
 sed -e "s|__HOME__|$HOME|g" -e "s|__REPO_DIR__|$repo_dir|g" \
-  launchd/com.agent-team.plist.example > launchd/com.agent-team.plist
+  launchd/com.agent-team.plist.example > ~/Library/LaunchAgents/com.agent-team.plist
 ```
 
-Load the job once, from the repository root:
-
-```sh
-launchctl bootstrap gui/$(id -u) launchd/com.agent-team.plist
-```
-
-`scripts/restart.sh` only kickstarts a job already loaded, so this line runs once per machine.
+That directory is the only one launchd reloads at login, so a reboot brings the fleet back by
+itself. Nothing renders into the repository: a job bootstrapped from any other path is
+registered for one boot session only. `scripts/restart.sh` loads the job from there and
+restarts it.
 
 The human now creates the Zulip organization and one bot per persona, downloads each
 zuliprc, installs every selected harness CLI, and logs in to those CLIs. An agent must not
