@@ -579,7 +579,7 @@ def update_daemons(as_name=constants.BRIDGE_IDENTITY, body=None):
 
 
 def domain_board(channel, body, root=None, as_name=constants.BRIDGE_IDENTITY,
-                 window_fn=None, board_fn=None, stream_id_fn=None):
+                 window_fn=None, board_fn=None, stream_id_fn=None, stamp_fn=None):
     """The board of a mapped channel's domain: one message in that domain's own status channel,
     edited in place forever. Its id lives in the domain repo, not in fleet state, because the
     domain owns what its board says and should carry the pointer with it.
@@ -587,7 +587,10 @@ def domain_board(channel, body, root=None, as_name=constants.BRIDGE_IDENTITY,
     The destination is a convention, #<channel>-status > board, never an argument: a board that
     can be aimed is a board that ends up in two places. The state file records the destination it
     was posted to, so moving the convention reposts rather than editing the message it left
-    behind."""
+    behind.
+
+    The tool stamps the first line, never the caller: the run clock is here and a model-typed
+    time is a guess."""
     root = constants.domain_root(channel) if root is None else root
     if not root:
         raise ValueError(prompts.DOMAIN_BOARD_UNMAPPED.format(channel=channel))
@@ -596,6 +599,7 @@ def domain_board(channel, body, root=None, as_name=constants.BRIDGE_IDENTITY,
     if (stream_id_fn or api.stream_id)(as_name, status) is None:
         raise ValueError(prompts.DOMAIN_BOARD_NO_CHANNEL.format(
             channel=channel, status=status, topic=topic))
+    body = (stamp_fn or prompts.board_stamp)() + "\n\n" + body
     window = (window_fn or api.window)(as_name)
     if len(body) > window:
         raise ValueError(prompts.DOMAIN_BOARD_TOO_LONG.format(size=len(body), window=window))

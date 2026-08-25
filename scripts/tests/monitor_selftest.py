@@ -455,7 +455,8 @@ def _body():
                 log.disabled = True
                 got = domain_board(channel, body, root=(tmp if root else ""),
                                    window_fn=lambda name: window, board_fn=board_stub,
-                                   stream_id_fn=lambda name, ch: 7 if resolves else None)
+                                   stream_id_fn=lambda name, ch: 7 if resolves else None,
+                                   stamp_fn=lambda: "STAMP")
                 error = None
             except ValueError as exc:
                 got, error = None, str(exc)
@@ -471,10 +472,12 @@ def _body():
                 here = isinstance(state, dict) and \
                     (state.get("channel"), state.get("topic")) == (status, constants.BOARD_TOPIC)
                 prior = state.get("message_id") if here else None
+                # the tool stamps the first line, so what is sent is never the body handed in
                 ok = (error is None and got == ((prior or 55), True)
                       and len(sent) == 1
                       and sent[0][1] == status
                       and sent[0][2] == constants.BOARD_TOPIC
+                      and sent[0][3] == "STAMP\n\n" + body
                       and sent[0][4] == prior
                       and written == {"channel": status, "topic": constants.BOARD_TOPIC,
                                       "message_id": prior or 55})

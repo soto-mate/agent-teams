@@ -1893,6 +1893,12 @@ WAKE_PROMPTS = [
 
 # (start epoch, timeout seconds, the clock the wake is told) for prompts.kill_clock, read in
 # UTC by the driver. Row three crosses midnight, where naive arithmetic on the hour breaks.
+# (epoch seconds, expected first line) for prompts.board_stamp, read in UTC like KILL_CLOCKS.
+BOARD_STAMPS = [
+    (0, "**Rebuilt 1970-01-01 00:00 UTC.**"),
+    (1786_000_000, "**Rebuilt 2026-08-06 07:06 UTC.**"),
+]
+
 KILL_CLOCKS = [
     (0, 1800, "00:30"),
     (0, 0, "00:00"),
