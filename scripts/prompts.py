@@ -64,6 +64,8 @@ DOMAIN_BOARD_TOO_LONG = (
     "window. A board is a view of open items, so cut rows rather than splitting it."
 )
 
+BOARD_STAMP = "**Rebuilt {stamp}.**"
+
 TOPIC_ANCHOR_MISS = "Refused: no message found in {channel} > {topic} to anchor the edit."
 
 TOPIC_PERMALINK = "Topic permalink: {url}"
@@ -151,6 +153,12 @@ RECORD_TRUNCATION_NOTE = (
 def kill_clock(started, timeout):
     """The wall clock the runner's SIGTERM lands on, as the persona will read it."""
     return time.strftime("%H:%M", time.localtime(started + timeout))
+
+
+def board_stamp(now=None):
+    """A board's first line, from the run clock. Zulip renders a message edited in place with its
+    creation date, so this is the only thing on a board that says when it was last rebuilt."""
+    return BOARD_STAMP.format(stamp=time.strftime("%Y-%m-%d %H:%M %Z", time.localtime(now)))
 
 
 def wake_prompt(body, record, notice="", domain="", kill_at=""):

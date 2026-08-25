@@ -57,6 +57,14 @@ def _body():
     os.environ["TZ"] = "UTC"
     time.tzset()
     try:
+        for now, expected in cases.BOARD_STAMPS:
+            got = board_stamp(now)
+            if got == expected:
+                passed += 1
+            else:
+                failed += 1
+                print("FAIL board_stamp(%r) -> %r wanted %r" % (now, got, expected))
+
         for started, timeout, expected in cases.KILL_CLOCKS:
             got = kill_clock(started, timeout)
             if got == expected:
