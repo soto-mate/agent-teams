@@ -816,7 +816,7 @@ def finish_progress(lane, message_id=None):
 
 
 def stall_sweep_once(now_ts=None):
-    """Finish every local stall check before best-effort Zulip posts and the board update."""
+    """Finish every local stall check before best-effort Zulip posts and the status updates."""
     now_ts = now_ts if now_ts is not None else time.time()
     alerts = []
     for lane, info in list(store.inflight_all().items()):
@@ -853,6 +853,7 @@ def stall_sweep_once(now_ts=None):
         store.mutate("inflight", fn)
     progress_sweep(now_ts)
     monitor.update_board()
+    monitor.update_daemons()
 
 
 def stall_sweep_thread(interval=60):

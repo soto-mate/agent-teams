@@ -1143,6 +1143,14 @@ MONITOR_AGES = [
     (90000, "1d 01h"),
 ]
 
+MONITOR_LAUNCHD_PRINT = "service = {\n\tpid = 9947\n}\n"
+MONITOR_LAUNCHD_START = "Mon Aug 25 11:04:00 2026\n"
+# One running with a health check, one loaded-but-dead, one with no health url.
+MONITOR_DAEMONS = [
+    {"label": "com.agent-team", "health": "http://127.0.0.1:1/health"},
+    {"label": "com.mate.voice-connector"},
+]
+
 BOARD_ITEM_VISIBILITY = [
     (200000, 200000 - 48 * 60 * 60, True),
     (200000, 200000 - 48 * 60 * 60 - 1, False),

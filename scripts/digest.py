@@ -12,6 +12,7 @@ import time
 
 import api
 import constants
+import monitor
 import prompts
 import read as read_mod
 import store
@@ -21,7 +22,6 @@ log = logging.getLogger("agent-team.digest")
 _LISTENER_START = re.compile(
     r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d+) .*agent-team listener starting",
     re.MULTILINE)
-_LAUNCHD_PID = re.compile(r"^\s*pid = (\d+)\s*$", re.MULTILINE)
 
 
 def digest_key(stream_id, topic):
@@ -63,22 +63,7 @@ def _listener_start_ts(text):
 
 
 def _launchd_start_ts(run=subprocess.run, uid_fn=os.getuid):
-    try:
-        printed = run(
-            ["launchctl", "print", "gui/%d/%s" % (uid_fn(), constants.LAUNCHD_LABEL)],
-            capture_output=True, text=True, timeout=constants.DIGEST_FACT_TIMEOUT)
-        match = _LAUNCHD_PID.search(printed.stdout or "") if printed.returncode == 0 else None
-        if match is None:
-            return None
-        started = run(
-            ["ps", "-o", "lstart=", "-p", match.group(1)], capture_output=True,
-            text=True, timeout=constants.DIGEST_FACT_TIMEOUT)
-        if started.returncode != 0:
-            return None
-        return datetime.datetime.strptime(
-            (started.stdout or "").strip(), "%a %b %d %H:%M:%S %Y").timestamp()
-    except (OSError, subprocess.SubprocessError, ValueError):
-        return None
+    return monitor.launchd_status(constants.LAUNCHD_LABEL, run=run, uid_fn=uid_fn)["started"]
 
 
 def last_restart_ts(log_path=None, run=subprocess.run, uid_fn=os.getuid):

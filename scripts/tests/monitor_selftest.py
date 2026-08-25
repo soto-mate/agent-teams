@@ -12,6 +12,7 @@ def run(module):
 
 
 def _body():
+    import datetime
     import json
     import pathlib
     import tempfile
@@ -346,6 +347,97 @@ def _body():
         failed += 1
         print("FAIL update_board isolation: %r %r %r state=%r alerts=%r attempts=%r" %
               (isolated, repeated, recovered, states, alerts, update_attempts))
+
+    class _Proc:
+        def __init__(self, stdout, returncode=0):
+            self.stdout, self.returncode = stdout, returncode
+
+    launchd_commands = []
+
+    def run_daemon(command, **kwargs):
+        launchd_commands.append(command)
+        return _Proc(cases.MONITOR_LAUNCHD_PRINT if command[0] == "launchctl"
+                     else cases.MONITOR_LAUNCHD_START)
+
+    live = launchd_status("com.agent-team", run=run_daemon, uid_fn=lambda: 501)
+    gone = launchd_status("com.agent-team", run=lambda *a, **k: _Proc("", 3),
+                          uid_fn=lambda: 501)
+    started_ts = datetime.datetime(2026, 8, 25, 11, 4, 0).timestamp()
+    if live == {"pid": 9947, "started": started_ts} \
+            and launchd_commands == [["launchctl", "print", "gui/501/com.agent-team"],
+                                     ["ps", "-o", "lstart=", "-p", "9947"]] \
+            and gone == {"pid": None, "started": None}:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL launchd_status -> %r gone=%r commands=%r" % (live, gone, launchd_commands))
+
+    def raising_fetch(url, timeout=None):
+        raise OSError("refused")
+
+    if health_ok("http://127.0.0.1:1/health", fetch=raising_fetch) is False:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL health_ok did not swallow a refused connection")
+
+    checked = []
+    rows = daemon_rows(
+        cases.MONITOR_DAEMONS,
+        status_fn=lambda label: {"pid": 9947, "started": 1200.0} \
+            if label == "com.agent-team" else {"pid": None, "started": None},
+        health_fn=lambda url: checked.append(url) or False)
+    if rows == [{"label": "com.agent-team", "pid": 9947, "started": 1200.0, "health": False},
+                {"label": "com.mate.voice-connector", "pid": None, "started": None,
+                 "health": None}] \
+            and checked == ["http://127.0.0.1:1/health"]:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL daemon_rows -> %r checked=%r" % (rows, checked))
+
+    step = constants.PROGRESS_MIN * 60
+    body = render_daemons(rows, now_ts=4800.0)
+    stamps = [[line for line in render_daemons(rows, now_ts=ts).splitlines()
+               if line.startswith("_As of ")]
+              for ts in (4800.0, 4800.0 + step - 1, 4800.0 + step)]
+    if prompts.DAEMON_RUNNING in body and prompts.DAEMON_MISSING in body \
+            and prompts.DAEMON_HEALTH_DOWN in body and prompts.DAEMON_HEALTH_NONE in body \
+            and "9947" in body and "1h 00m" in body \
+            and all(len(rendered) == 1 for rendered in stamps) \
+            and stamps[0] == stamps[1] and stamps[0] != stamps[2]:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL render_daemons -> %r stamps=%r" % (body, stamps))
+
+    states = {}
+    sent = []
+    saved = store.load, store.mutate, send_mod.board_message
+    try:
+        store.load = lambda name: dict(states.get(name, {}))
+
+        def mutate_daemon_state(name, fn):
+            states[name] = fn(dict(states.get(name, {})))
+
+        def daemon_board(as_name, channel, topic, body, message_id=None):
+            sent.append((as_name, channel, topic, message_id))
+            return (message_id or 77), message_id is None
+
+        store.mutate = mutate_daemon_state
+        send_mod.board_message = daemon_board
+        first = update_daemons(body="daemons")
+        again = update_daemons(body="daemons")
+    finally:
+        store.load, store.mutate, send_mod.board_message = saved
+    if first == (77, True) and again == (77, False) \
+            and states == {constants.DAEMONS_STATE: {"message_id": 77}} \
+            and [row[1:3] for row in sent] == \
+            [(constants.STATUS_STREAM, constants.DAEMONS_TOPIC)] * 2:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL update_daemons -> %r %r states=%r sent=%r" % (first, again, states, sent))
 
     # domain_board: the id lives in the domain repo, so each row gets its own throwaway root.
     for label, channel, root, body, window, resolves, state, refusal in cases.DOMAIN_BOARDS:
