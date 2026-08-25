@@ -5,9 +5,13 @@ import datetime
 import difflib
 import json
 import logging
+import os
 import pathlib
+import re
+import subprocess
 import sys
 import time
+import urllib.request
 
 import api
 import constants
@@ -20,6 +24,7 @@ import send as send_mod
 import store
 
 log = logging.getLogger("agent-team.monitor")
+_LAUNCHD_PID = re.compile(r"^\s*pid = (\d+)\s*$", re.MULTILINE)
 
 
 def _ledger_rows(prefix):
@@ -424,6 +429,72 @@ def board_parts(limit, lanes=None, persona_rows=None, todos=None, digests=None,
     return dict(sections)
 
 
+def launchd_status(label, run=subprocess.run, uid_fn=os.getuid):
+    """Whether launchd holds a pid for one label, and since when. None pids on any failure:
+    a status board that raises tells you less than one that says "not loaded"."""
+    try:
+        printed = run(
+            ["launchctl", "print", "gui/%d/%s" % (uid_fn(), label)],
+            capture_output=True, text=True, timeout=constants.DIGEST_FACT_TIMEOUT)
+        match = _LAUNCHD_PID.search(printed.stdout or "") if printed.returncode == 0 else None
+        if match is None:
+            return {"pid": None, "started": None}
+        started = run(
+            ["ps", "-o", "lstart=", "-p", match.group(1)], capture_output=True,
+            text=True, timeout=constants.DIGEST_FACT_TIMEOUT)
+        if started.returncode != 0:
+            return {"pid": int(match.group(1)), "started": None}
+        return {"pid": int(match.group(1)), "started": datetime.datetime.strptime(
+            (started.stdout or "").strip(), "%a %b %d %H:%M:%S %Y").timestamp()}
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return {"pid": None, "started": None}
+
+
+def health_ok(url, fetch=urllib.request.urlopen, timeout=2):
+    try:
+        with fetch(url, timeout=timeout) as response:
+            return response.getcode() == 200
+    except Exception:
+        return False
+
+
+def daemon_rows(daemons=None, status_fn=None, health_fn=None):
+    status_fn = launchd_status if status_fn is None else status_fn
+    health_fn = health_ok if health_fn is None else health_fn
+    rows = []
+    for daemon in constants.DAEMONS if daemons is None else daemons:
+        label = daemon.get("label")
+        status = status_fn(label)
+        url = daemon.get("health")
+        rows.append({
+            "label": label,
+            "pid": status.get("pid"),
+            "started": status.get("started"),
+            "health": health_fn(url) if url else None,
+        })
+    return rows
+
+
+def render_daemons(rows, now_ts=None):
+    """The stamp is floored to the progress step, so a sweep that finds nothing changed sends
+    no PATCH: an every-minute stamp would edit this message 1440 times a day."""
+    now_ts = time.time() if now_ts is None else now_ts
+    step = constants.PROGRESS_MIN * 60
+    stamp = datetime.datetime.fromtimestamp(now_ts - now_ts % step).strftime("%H:%M")
+    table = []
+    for row in rows:
+        health = prompts.DAEMON_HEALTH_NONE if row["health"] is None else (
+            prompts.DAEMON_HEALTH_OK if row["health"] else prompts.DAEMON_HEALTH_DOWN)
+        table.append(prompts.DAEMONS_ROW.format(
+            label=digest.safe_text(row["label"]).replace("|", "\\|"),
+            state=prompts.DAEMON_RUNNING if row["pid"] else prompts.DAEMON_MISSING,
+            pid=row["pid"] if row["pid"] else prompts.BOARD_UNKNOWN,
+            uptime=format_age(None if row["started"] is None else now_ts - row["started"]),
+            health=health,
+        ))
+    return prompts.DAEMONS_BOARD.format(stamp=stamp, rows="\n".join(table))
+
+
 def _board_working(state_name, message_id=None):
     def save(data):
         if message_id is not None:
@@ -483,6 +554,24 @@ def update_board(as_name=constants.BRIDGE_IDENTITY, content=None, contents=None)
             except (Exception, SystemExit):
                 log.exception("board section %s failure state could not be saved", name)
     return results
+
+
+def update_daemons(as_name=constants.BRIDGE_IDENTITY, body=None):
+    """The daemons topic: one message edited in place, like the board but never split."""
+    body = render_daemons(daemon_rows()) if body is None else body
+    message_id = store.load(constants.DAEMONS_STATE).get("message_id")
+    try:
+        new_id, changed = send_mod.board_message(
+            as_name, constants.STATUS_STREAM, constants.DAEMONS_TOPIC, body, message_id)
+        _board_working(constants.DAEMONS_STATE, new_id if new_id != message_id else None)
+        return new_id, changed
+    except (Exception, SystemExit):
+        log.exception("daemons topic failed to update")
+        try:
+            _board_failed(as_name, constants.DAEMONS_STATE, constants.DAEMONS_TOPIC)
+        except (Exception, SystemExit):
+            log.exception("daemons failure state could not be saved")
+        return message_id, None
 
 
 def domain_board(channel, body, root=None, as_name=constants.BRIDGE_IDENTITY,

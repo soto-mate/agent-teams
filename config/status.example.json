@@ -1,4 +1,7 @@
 {
   "channel": "status",
-  "domain_channel": "{channel}-status"
+  "domain_channel": "{channel}-status",
+  "daemons": [
+    {"label": "com.agent-team"}
+  ]
 }

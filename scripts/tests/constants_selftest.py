@@ -150,9 +150,13 @@ def _body():
 
     try:
         status = json.loads(STATUS_EXAMPLE_PATH.read_text())
-        if set(status) == {"channel", "domain_channel"} \
-                and all(isinstance(value, str) and value for value in status.values()) \
-                and "{channel}" in status["domain_channel"]:
+        if set(status) == {"channel", "domain_channel", "daemons"} \
+                and all(isinstance(status[key], str) and status[key]
+                        for key in ("channel", "domain_channel")) \
+                and "{channel}" in status["domain_channel"] \
+                and status["daemons"] \
+                and all(set(row) <= {"label", "health"} and row.get("label")
+                        for row in status["daemons"]):
             passed += 1
         else:
             failed += 1

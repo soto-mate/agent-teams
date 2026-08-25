@@ -881,13 +881,16 @@ def _body():
         "lane-a": {"stream_id": 1, "topic": "one"},
         "lane-b": {"stream_id": 2, "topic": "two"},
     }
+    daemon_updates = []
     old_inflight, old_update, old_stalled = store.inflight_all, monitor.update_board, stalled_wake
+    old_daemons = monitor.update_daemons
     old_progress = progress_sweep
     old_post, old_loop, old_mutate = send_mod.post, loops.loop_for_lane, store.mutate
     old_log_disabled = log.disabled
     try:
         store.inflight_all = lambda: inflight
         monitor.update_board = lambda: board_updates.append(True)
+        monitor.update_daemons = lambda: daemon_updates.append(True)
         globals()["progress_sweep"] = lambda now: sweep_events.append("progress")
         globals()["stalled_wake"] = lambda lane, now: (
             sweep_events.append("check:" + lane) or
@@ -912,13 +915,14 @@ def _body():
         stall_sweep_once(now_ts=1000)
     finally:
         store.inflight_all, monitor.update_board = old_inflight, old_update
+        monitor.update_daemons = old_daemons
         globals()["stalled_wake"] = old_stalled
         globals()["progress_sweep"] = old_progress
         send_mod.post, loops.loop_for_lane, store.mutate = old_post, old_loop, old_mutate
         log.disabled = old_log_disabled
     expected_alert = prompts.STALLED_WAKE_ALERT.format(
         lane="lane-a", pid=12, quiet_min=10, wake_log="/tmp/wake")
-    if (board_updates == [True, True]
+    if (board_updates == [True, True] and daemon_updates == [True, True]
             and sweep_events == ["check:lane-a", "check:lane-b", "post:" + expected_alert,
                                  "progress", "post-failed", "progress"]
             and inflight["lane-a"].get("alerted") is True
@@ -927,8 +931,8 @@ def _body():
         passed += 1
     else:
         failed += 1
-        print("FAIL stall_sweep_once order=%r board=%r inflight=%r" %
-              (sweep_events, board_updates, inflight))
+        print("FAIL stall_sweep_once order=%r board=%r daemons=%r inflight=%r" %
+              (sweep_events, board_updates, daemon_updates, inflight))
 
     sweep_threads = []
 

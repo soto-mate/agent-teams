@@ -303,6 +303,19 @@ BOARD_ACTIVITY = (
     "{rows}"
 )
 BOARD_ACTIVITY_ROW = "| {persona} | {provider} | {status} | {cost} | {kicks} |"
+DAEMONS_BOARD = (
+    "## Daemons\n\n"
+    "_As of {stamp}._\n\n"
+    "| Daemon | State | Pid | Uptime | Health |\n"
+    "|---|---|---:|---|---|\n"
+    "{rows}"
+)
+DAEMONS_ROW = "| {label} | {state} | {pid} | {uptime} | {health} |"
+DAEMON_RUNNING = "running"
+DAEMON_MISSING = "not loaded"
+DAEMON_HEALTH_OK = "ok"
+DAEMON_HEALTH_DOWN = "down"
+DAEMON_HEALTH_NONE = "-"
 DIGEST_CLIP_SUFFIX = "..."
 BOARD_PARKED = "```spoiler Parked ({count})\n{rows}\n```"
 BOARD_PARKED_ROW = "- ~~[{topic}]({permalink})~~{lanes}"
