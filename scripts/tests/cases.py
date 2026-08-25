@@ -1476,6 +1476,43 @@ OPERATOR_DECISIONS = [
     ("KICK: JAN read the diffs", ("kick", "jan", "read the diffs")),
 ]
 
+# (reply text, waking persona, expected decision or None) for listener.parse_handoff -- the
+# persona's own handoff block is the loop decision and the operator model is the fallback, so
+# every row that parses to None is one operator continuation run that still happens
+HANDOFFS = [
+    ("work done\n- Disposition: KICK\n- Next: inbox-sweep Phase A",
+     "chella", ("kick", "chella", "inbox-sweep Phase A")),
+    # a KICK with no bounded step is not a kick: it falls back rather than forging an empty body
+    ("- Disposition: KICK\n- Next: none", "chella", None),
+    ("- Disposition: KICK\n- Next:", "chella", None),
+    ("- Disposition: CLOSE\n- Next: none", "chella", ("close", "")),
+    ("- Disposition: CLOSE\n- Next: the sweep found nothing to file",
+     "chella", ("close", "the sweep found nothing to file")),
+    ("- Disposition: NEEDS MATE\n- Next: he has to pick the offer",
+     "chella", ("close", "he has to pick the offer")),
+    # the build/review/evaluate chain: the Next line names who goes next
+    ("- Disposition: KICK\n- Next: jan: read the diff against the brief",
+     "bob", ("kick", "jan", "read the diff against the brief")),
+    # display spelling lands on the roster key, same as parse_operator_decision
+    ("- Disposition: KICK\n- Next: Eve: run the selftests", "bob", ("kick", "eve", "run the selftests")),
+    # an unknown name before the colon is body text, not a persona prefix
+    ("- Disposition: KICK\n- Next: Phase B: file the rest", "chella",
+     ("kick", "chella", "Phase B: file the rest")),
+    ("no block at all, just a reply", "chella", None),
+    ("", "chella", None),
+    (None, "chella", None),
+    # ambiguity never forges a kick: two blocks, or a Next line with no Disposition
+    ("- Disposition: KICK\n- Next: a\n- Disposition: CLOSE\n- Next: b", "chella", None),
+    ("- Disposition: KICK\n- Next: a\n- Next: b", "chella", None),
+    ("- Next: inbox-sweep Phase A", "chella", None),
+    ("- Disposition: MAYBE\n- Next: something", "chella", None),
+    # markdown bold and bare lines both parse; personas write either
+    ("**Disposition:** KICK\n**Next:** Phase C", "chella", ("kick", "chella", "Phase C")),
+    ("Disposition: kick\nNext: Phase C", "chella", ("kick", "chella", "Phase C")),
+    # the waking persona has to be on the roster or the default kick has no target
+    ("- Disposition: KICK\n- Next: Phase C", "nobody", None),
+]
+
 # (prior reply row, sender is a persona, topic carries an open loop, expected (hop, ask, relay))
 # for listener.wake_provenance -- the whole chain in one table: a human tag relays, the wake
 # answering a hop-0 persona reply keeps exactly its asker's tag-back, and everything deeper,
