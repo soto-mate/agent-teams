@@ -476,11 +476,14 @@ def daemon_rows(daemons=None, status_fn=None, health_fn=None):
 
 
 def render_daemons(rows, now_ts=None):
-    """The stamp is floored to the progress step, so a sweep that finds nothing changed sends
-    no PATCH: an every-minute stamp would edit this message 1440 times a day."""
+    """Every clock in this message reads from the same floored step, the uptimes included: a
+    sweep that finds nothing changed then sends no PATCH. Flooring only the stamp is not enough,
+    because an uptime in whole minutes still moves every minute and edits this message 1440
+    times a day (measured 2026-08-25)."""
     now_ts = time.time() if now_ts is None else now_ts
     step = constants.PROGRESS_MIN * 60
-    stamp = datetime.datetime.fromtimestamp(now_ts - now_ts % step).strftime("%H:%M")
+    floored = now_ts - now_ts % step
+    stamp = datetime.datetime.fromtimestamp(floored).strftime("%H:%M")
     table = []
     for row in rows:
         health = prompts.DAEMON_HEALTH_NONE if row["health"] is None else (
@@ -489,7 +492,8 @@ def render_daemons(rows, now_ts=None):
             label=digest.safe_text(row["label"]).replace("|", "\\|"),
             state=prompts.DAEMON_RUNNING if row["pid"] else prompts.DAEMON_MISSING,
             pid=row["pid"] if row["pid"] else prompts.BOARD_UNKNOWN,
-            uptime=format_age(None if row["started"] is None else now_ts - row["started"]),
+            uptime=format_age(None if row["started"] is None
+                              else max(0, floored - row["started"])),
             health=health,
         ))
     return prompts.DAEMONS_BOARD.format(stamp=stamp, rows="\n".join(table))

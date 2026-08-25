@@ -398,18 +398,17 @@ def _body():
 
     step = constants.PROGRESS_MIN * 60
     body = render_daemons(rows, now_ts=4800.0)
-    stamps = [[line for line in render_daemons(rows, now_ts=ts).splitlines()
-               if line.startswith("_As of ")]
-              for ts in (4800.0, 4800.0 + step - 1, 4800.0 + step)]
+    late = render_daemons(rows, now_ts=4800.0 + step - 1)
+    next_step = render_daemons(rows, now_ts=4800.0 + step)
     if prompts.DAEMON_RUNNING in body and prompts.DAEMON_MISSING in body \
             and prompts.DAEMON_HEALTH_DOWN in body and prompts.DAEMON_HEALTH_NONE in body \
-            and "9947" in body and "1h 00m" in body \
-            and all(len(rendered) == 1 for rendered in stamps) \
-            and stamps[0] == stamps[1] and stamps[0] != stamps[2]:
+            and "9947" in body and "1h 00m" in body and body.count("_As of ") == 1 \
+            and body == late and body != next_step:
         passed += 1
     else:
         failed += 1
-        print("FAIL render_daemons -> %r stamps=%r" % (body, stamps))
+        print("FAIL render_daemons -> %r stable=%r stepped=%r"
+              % (body, body == late, body != next_step))
 
     states = {}
     sent = []
