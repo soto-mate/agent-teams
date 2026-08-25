@@ -181,6 +181,49 @@ def parse_operator_decision(text):
     return None
 
 
+_HANDOFF_CLOSE = ("CLOSE", "NEEDS MATE")
+
+
+def _handoff_lines(text):
+    """The reply's Disposition and Next values, in order, markdown bullet and bold stripped.
+    Partition on the first colon only, so 'Next: bob: build it' keeps its persona prefix."""
+    found = {"disposition": [], "next": []}
+    for line in (text or "").splitlines():
+        head, sep, value = line.strip().lstrip("-*").replace("**", "").partition(":")
+        key = head.strip().lower()
+        if sep and key in found:
+            found[key].append(value.strip())
+    return found
+
+
+def parse_handoff(text, persona):
+    """The persona's own handoff block is the loop decision; the operator model is the fallback
+    (Archie, 2026-08-25). Returns ('kick', persona, body) for a KICK whose Next line names a
+    bounded step, ('close', reason) for CLOSE or NEEDS MATE, and None for anything else, which
+    is what hands the decision back to the operator continuation. More than one Disposition or
+    Next line parses to None: an ambiguous block never forges a kick, the same invariant
+    parse_operator_decision holds. A Next line opening '<persona>:' kicks that persona instead
+    of the one whose wake just ended, which is what carries the build/review/evaluate chains."""
+    found = _handoff_lines(text)
+    if len(found["disposition"]) != 1 or len(found["next"]) > 1:
+        return None
+    disposition = found["disposition"][0].upper()
+    nxt = found["next"][0] if found["next"] else ""
+    if disposition in _HANDOFF_CLOSE:
+        return ("close", "" if nxt.lower() in ("", "none") else nxt)
+    if disposition != "KICK":
+        return None
+    if nxt.lower() in ("", "none"):
+        return None
+    name, sep, rest = nxt.partition(":")
+    key = name.strip().lower()
+    if sep and key in personas.PERSONAS and rest.strip():
+        return ("kick", key, rest.strip())
+    if persona not in personas.PERSONAS:
+        return None
+    return ("kick", persona, nxt)
+
+
 def _location_from_refetch(payload, fallback_channel, fallback_topic):
     """Pure: turns a GET /messages/<id> refetch payload into (channel, topic), falling back to
     the wake-time lane when the refetch failed or returned no location. Shared by handle_wake
@@ -525,7 +568,7 @@ def handle_wake(identity, event, flag_holder_ids, persona_emails=frozenset()):
             # failed wake (they are logged and swallowed inside handle_rail_a itself). Current
             # topic goes to the loop lookup too, so a rename doesn't miss the loop.
             try:
-                handle_rail_a(stream_id, post_channel, post_topic, record, reply)
+                handle_rail_a(stream_id, post_channel, post_topic, record, reply, identity)
             except (Exception, SystemExit) as exc:
                 log.exception("rail A continuation check failed for lane %s", lane)
                 _post_operator_failure(prompts.OPERATOR_CONTINUATION_FAILED, exc,
@@ -538,11 +581,39 @@ def handle_wake(identity, event, flag_holder_ids, persona_emails=frozenset()):
 
 # --- Rail A: a finished persona wake continues its lane's open loop, if any ---------------------
 
-def handle_rail_a(stream_id, channel, topic, record, reply):
+def _apply_decision(decision, loop, channel, topic):
+    """Fires one parsed ('kick', persona, body) or ('close', reason) against the loop. One
+    spelling for both deciders: the persona's own handoff line and the operator continuation."""
+    loop_id = loop["id"]
+    if decision[0] == "close":
+        _close_loop(loop_id, channel, topic, decision[1] or prompts.HANDOFF_CLOSE_REASON)
+        return
+    _, persona_name, body = decision
+    if persona_name not in personas.PERSONAS:
+        log.warning("kicked unknown persona %r for loop %s; skipped, never forged", persona_name, loop_id)
+        return
+    # ledger row written before the kick posts (invariant); check-and-append is atomic
+    # against a concurrent continuation on the same loop (finding 3).
+    n = loops.kick_record(loop_id, persona=persona_name)
+    if n is False:
+        _close_loop(loop_id, channel, topic, prompts.LOOP_BUDGET_REASON.format(budget=loop["budget"]))
+        return
+    # A kick must mention its persona or the wake never fires; same shape as loops.py's CLI kick.
+    kick_text = prompts.kick_body(
+        prompts.MENTION.format(name=personas.display_name(persona_name), body=body),
+        n, loop["budget"])
+    try:
+        send_mod.post(constants.BRIDGE_IDENTITY, channel, topic, kick_text)
+    except (Exception, SystemExit):
+        log.exception("kick post failed for loop %s (ledger already advanced to %d/%d)", loop_id, n, loop["budget"])
+
+
+def handle_rail_a(stream_id, channel, topic, record, reply, persona=None):
     """After a persona's reply has landed, continue any open loop on this stream+topic: the
-    budget floor is checked against the ledger before the continuation is even spawned (invariant);
-    at budget the loop closes without a run. Otherwise the operator continuation decides kick or
-    close, and a reply that fails to parse leaves the loop untouched (never forge a kick)."""
+    budget floor is checked against the ledger before anything is spawned (invariant); at budget
+    the loop closes without a run. Then the persona's own handoff block decides, and only a reply
+    with no parsable block costs an operator continuation run. Either way a reply that fails to
+    parse leaves the loop untouched (never forge a kick)."""
     loop = loops.loop_for_lane(constants.BRIDGE_IDENTITY, stream_id, topic)
     if loop is None:
         return
@@ -552,6 +623,11 @@ def handle_rail_a(stream_id, channel, topic, record, reply):
 
     if loops.budget_reached(loop_id):
         _close_loop(loop_id, dest_channel, dest_topic, prompts.LOOP_BUDGET_REASON.format(budget=loop["budget"]))
+        return
+
+    handoff = parse_handoff(reply, persona)
+    if handoff is not None:
+        _apply_decision(handoff, loop, dest_channel, dest_topic)
         return
 
     reply_text = reply or ""
@@ -587,28 +663,7 @@ def handle_rail_a(stream_id, channel, topic, record, reply):
                  loop_id, (result.reply or "")[:300])
         return
 
-    if decision[0] == "kick":
-        _, persona_name, body = decision
-        if persona_name not in personas.PERSONAS:
-            log.warning("operator kicked unknown persona %r for loop %s; skipped, never forged", persona_name, loop_id)
-            return
-        # ledger row written before the kick posts (invariant); check-and-append is atomic
-        # against a concurrent continuation on the same loop (finding 3).
-        n = loops.kick_record(loop_id, persona=persona_name)
-        if n is False:
-            _close_loop(loop_id, dest_channel, dest_topic, prompts.LOOP_BUDGET_REASON.format(budget=loop["budget"]))
-            return
-        # A kick must mention its persona or the wake never fires; same shape as loops.py's CLI kick.
-        kick_text = prompts.kick_body(
-            prompts.MENTION.format(name=personas.display_name(persona_name), body=body),
-            n, loop["budget"])
-        try:
-            send_mod.post(constants.BRIDGE_IDENTITY, dest_channel, dest_topic, kick_text)
-        except (Exception, SystemExit):
-            log.exception("kick post failed for loop %s (ledger already advanced to %d/%d)", loop_id, n, loop["budget"])
-    elif decision[0] == "close":
-        _, reason = decision
-        _close_loop(loop_id, dest_channel, dest_topic, reason)
+    _apply_decision(decision, loop, dest_channel, dest_topic)
 
 
 # --- Rail B: the operator tags the bridge directly -----------------------------------------

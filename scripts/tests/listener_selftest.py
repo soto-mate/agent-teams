@@ -227,6 +227,51 @@ def _body():
             failed += 1
             print("FAIL parse_operator_decision(%r) -> %r wanted %r" % (text, got, expected))
 
+    for text, waking, expected in cases.HANDOFFS:
+        got = parse_handoff(text, waking)
+        if got == expected:
+            passed += 1
+        else:
+            failed += 1
+            print("FAIL parse_handoff(%r, %r) -> %r wanted %r" % (text, waking, got, expected))
+
+    # the rail itself: a parsable handoff decides without spending an operator continuation run,
+    # and only a reply with no block reaches runner.run (Archie, 2026-08-25).
+    rail_spawns, rail_posts, rail_closed, rail_kicks = [], [], [], []
+    saved_rail = (runner.run, loops.loop_for_lane, loops.budget_reached, loops.kick_record,
+                  loops.close, send_mod.post, store.cost_append, log.disabled)
+    fallback = types.SimpleNamespace(cost_usd=0.0, turns=1, usage={}, provider="agy", reply="prose only")
+
+    def _rail_run(persona, prompt, **kw):
+        rail_spawns.append(persona)
+        return fallback
+
+    try:
+        log.disabled = True
+        runner.run = _rail_run
+        store.cost_append = lambda row: None
+        loops.budget_reached = lambda *a, **k: False
+        loops.loop_for_lane = lambda *a, **k: {"id": 7, "current_channel": None, "current_topic": None,
+                                               "kicks": 1, "budget": 3, "header_id": 1, "header_text": ""}
+        loops.kick_record = lambda loop_id, **k: rail_kicks.append(k.get("persona")) or 2
+        loops.close = lambda loop_id, **k: rail_closed.append(loop_id)
+        send_mod.post = lambda identity, channel, topic, body, **kw: rail_posts.append(body)
+        handle_rail_a(1, "c", "t", "record", "- Disposition: KICK\n- Next: jan: read the diff", "bob")
+        handle_rail_a(1, "c", "t", "record", "- Disposition: CLOSE\n- Next: none", "bob")
+        handle_rail_a(1, "c", "t", "record", "a reply with no handoff block", "bob")
+    finally:
+        (runner.run, loops.loop_for_lane, loops.budget_reached, loops.kick_record,
+         loops.close, send_mod.post, store.cost_append, log.disabled) = saved_rail
+    kicked = rail_kicks == ["jan"] and len(rail_posts) == 2 \
+        and personas.display_name("jan") in rail_posts[0] and rail_posts[0].endswith("kick 2/3")
+    closed = rail_closed == [7] and prompts.HANDOFF_CLOSE_REASON in rail_posts[1]
+    if kicked and closed and rail_spawns == ["operator"]:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL rail A handoff path -> kicks %r posts %r closed %r spawns %r"
+              % (rail_kicks, rail_posts, rail_closed, rail_spawns))
+
     for msg_ts, now_ts, max_age, expected in cases.TAG_STALENESS:
         got = is_tag_stale(msg_ts, now_ts, max_age)
         if got == expected:

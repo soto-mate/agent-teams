@@ -111,6 +111,10 @@ WAKE_HEADER = (
     "continue.\n"
     "The wake that does the work writes the closing post and any STATE block before "
     "finishing; never end expecting another wake to summarize.\n"
+    "End a loop wake with `- Disposition: KICK | CLOSE | NEEDS MATE` and `- Next: <one "
+    "bounded step, or none>`. On KICK the machinery fires Next verbatim as your next kick, "
+    "and a Next line starting `<persona>:` kicks that persona instead of you; CLOSE and "
+    "NEEDS MATE close the loop.\n"
     "A text document tracked in a public repo ships as a sha-pinned GitHub link: commit and "
     "push first, then link .../blob/<sha>/<path>, never blob/main; the summary and decisions "
     "still go in the body. Everything else, plans and private text included, plus images and "
@@ -460,6 +464,8 @@ def kick_body(body, n, budget):
 
 LOOP_BUDGET_OUT = "Loop closed: {reason} {mate}"
 LOOP_BUDGET_REASON = "budget of {budget} kicks reached"
+# a CLOSE or NEEDS MATE handoff whose Next line carried no reason still posts a readable close
+HANDOFF_CLOSE_REASON = "the persona's handoff line closed the loop"
 
 LOOP_NOTE = (
     "This topic already has an open loop ({loop_id}), {n}/{budget} kicks used; only wake a "
