@@ -61,9 +61,11 @@ mkdir -p ~/.gemini/config
 ln -s "$(pwd -P)/mcps/playwright.json" ~/.gemini/config/mcp_config.json
 ```
 
-`config/domains.json` ships empty and stays empty until a channel of yours fronts a repo. Fill it
-with `"<channel name>": "/absolute/path"` and every wake in that channel is told where that repo
-is and that its skills apply, read by path. `docs/OPERATING.md` has the rest, including where a
+`config/domains.json` maps a channel prefix, the text before a channel name's first hyphen, to
+the repo its wakes work against: `"<prefix>": "/absolute/path"`, or `""` for a group of channels
+that fronts no repo. Every wake in a channel under that prefix is told where the repo is and
+that its skills apply, read by path. A listed prefix is also a section on the fleet board, its
+channels discovered rather than listed. `docs/OPERATING.md` has the rest, including where a
 domain's board lives.
 
 Copy `docs/OPERATING.example.md` to the gitignored `docs/OPERATING.md`: the live file is your

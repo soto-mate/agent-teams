@@ -19,8 +19,6 @@ MODEL_EFFORT_DEFAULTS_PATH = REPO_DIR / "config" / "model-effort-defaults.json"
 MODEL_EFFORT_DEFAULTS_EXAMPLE_PATH = REPO_DIR / "config" / "model-effort-defaults.example.json"
 RAILS_PATH = REPO_DIR / "config" / "rails.json"
 RAILS_EXAMPLE_PATH = REPO_DIR / "config" / "rails.example.json"
-CHANNELS_PATH = REPO_DIR / "config" / "channels.json"
-CHANNELS_EXAMPLE_PATH = REPO_DIR / "config" / "channels.example.json"
 DOMAINS_PATH = REPO_DIR / "config" / "domains.json"
 DOMAINS_EXAMPLE_PATH = REPO_DIR / "config" / "domains.example.json"
 STATUS_PATH = REPO_DIR / "config" / "status.json"
@@ -70,10 +68,6 @@ def _load_rails():
     return _load_json_object(RAILS_PATH, RAILS_EXAMPLE_PATH, "rails")
 
 
-def _load_channels():
-    return _load_json_object(CHANNELS_PATH, CHANNELS_EXAMPLE_PATH, "channels")
-
-
 def _load_domains():
     return _load_json_object(DOMAINS_PATH, DOMAINS_EXAMPLE_PATH, "domains")
 
@@ -90,7 +84,6 @@ _MATRIX = _load_matrix()
 HARNESS_DEFAULTS = _load_harness_defaults()
 MODEL_EFFORT_DEFAULTS = _load_model_effort_defaults()
 _RAILS = _load_rails()
-_CHANNELS = _load_channels()
 _DOMAINS = _load_domains()
 _STATUS = _load_status()
 EMBASSIES = _load_embassies()
@@ -261,38 +254,41 @@ LAST_ACTION_LABELS = {
 }
 
 
-def board_groups(channels=None):
-    """The board's channel groups, in config order."""
-    rows = _CHANNELS if channels is None else channels
-    return tuple((group, tuple(names)) for group, names in rows.items())
+def channel_prefix(channel):
+    """A channel's domain key: the text before its first hyphen, the whole name without one."""
+    return channel.split("-", 1)[0]
 
 
-BOARD_GROUPS = board_groups()
+def board_groups(streams, domains=None):
+    """The board's sections, in config order: each listed prefix with the visible channels
+    carrying it. The channels are discovered, never listed, so a new one needs no config."""
+    rows = _DOMAINS if domains is None else domains
+    return tuple((prefix, tuple(name for name in streams if channel_prefix(name) == prefix))
+                 for prefix in rows)
 
 
 def domain_root(channel, domains=None):
-    """The domain repo a channel's wakes work against, "" when the channel maps to none."""
+    """The domain repo a channel's wakes work against, "" when its prefix maps to none."""
     rows = _DOMAINS if domains is None else domains
-    root = rows.get(channel)
+    root = rows.get(channel_prefix(channel))
     return root if isinstance(root, str) else ""
 
 
-def board_channels(groups=None):
-    return {channel for _, channels in (BOARD_GROUPS if groups is None else groups)
-            for channel in channels}
+def board_channels(groups):
+    return {channel for _, channels in groups for channel in channels}
 
 
 BOARD_STATE_PREFIX = "board"
 
 
 def board_state_key(section):
-    """Where a board section's message id lives. Derived, not tabled: a channel group added to
-    channels.json would otherwise KeyError every refresh once the board has split."""
+    """Where a board section's message id lives. Derived, not tabled: a prefix added to
+    domains.json would otherwise KeyError every refresh once the board has split."""
     return BOARD_STATE_PREFIX if section == "activity" \
         else "%s-%s" % (BOARD_STATE_PREFIX, section)
 
 
-BOARD_SECTIONS = ("activity",) + tuple(group.casefold() for group, _ in BOARD_GROUPS)
+BOARD_SECTIONS = ("activity",) + tuple(prefix.casefold() for prefix in _DOMAINS)
 PARKED_STATE = "parked"
 
 RESOLVED_PREFIX = "✔"  # Zulip's own resolve marker on a topic name; startswith semantics only.

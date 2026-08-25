@@ -236,7 +236,7 @@ READ_NARROWS = [
 CHANNEL_LIST = (
     [{"name": "1jf-sweeps", "description": "Jobfinder review"},
      {"name": "setup", "description": "Fleet work"}],
-    {"1jf-sweeps": "/tmp/jobfinder"},
+    {"1jf": "/tmp/jobfinder"},
     "#1jf-sweeps: Jobfinder review [domain: /tmp/jobfinder]\n#setup: Fleet work",
 )
 
@@ -1202,8 +1202,8 @@ BOARD_RENDER_DIGESTS = {
 }
 BOARD_RENDER_CONTAINS = [
     "## Activity today\n\n| Persona | Provider | Status | Cost | Kicks |",
-    "## Workshop",
-    "## Domains",
+    "## setup\n",
+    "## maintenance\n",
     "- **setup**",
     "  - [Build board](https://example/1)",
     "    - Build is ready @" + Z + "\\*\\*all\\*\\* _(as of ",
@@ -2081,29 +2081,33 @@ MATE_EMAIL_SETS = [
     (None, "", frozenset()),
 ]
 
-# (channels config, expected groups) for constants.board_groups, which keeps config order;
-# board_channels flattens the same rows.
-# (channel, expected root) for constants.domain_root against DOMAIN_MAP. A channel with no
-# entry, and a row whose value is not a string, both resolve to "" so no header line is added.
-DOMAIN_MAP = {"mapped": "/tmp/domain", "broken": ["/tmp/list"]}
+# (channel, expected root) for constants.domain_root against DOMAIN_MAP. The lookup is by
+# prefix, so every channel under a listed prefix resolves; an unlisted prefix and a row whose
+# value is not a string both resolve to "" so no header line is added.
+DOMAIN_MAP = {"1jf": "/tmp/domain", "bad": ["/tmp/list"], "0ws": ""}
 DOMAIN_ROOTS = [
-    ("mapped", "/tmp/domain"),
-    ("unmapped", ""),
-    ("broken", ""),
+    ("1jf-setup", "/tmp/domain"),
+    ("1jf", "/tmp/domain"),
+    ("zzz-setup", ""),
+    ("bad-setup", ""),
+    ("0ws-setup", ""),
 ]
 
-# (section, state key) for constants.board_state_key. The first three pin the keys the live
-# board already uses, so deriving them migrates nothing; the fourth is the case a table could
-# not answer, a channel group added to channels.json.
+# (section, state key) for constants.board_state_key. The prefixes pin the keys the live board
+# uses, so deriving them migrates nothing; "activity" is the section with no prefix.
 BOARD_STATE_KEYS = [
     ("activity", "board"),
-    ("workshop", "board-workshop"),
-    ("domains", "board-domains"),
+    ("0ws", "board-0ws"),
     ("1jf", "board-1jf"),
+    ("8dm", "board-8dm"),
 ]
 
+# (domains config, visible streams, expected groups) for constants.board_groups, which keeps
+# config order and discovers each prefix's channels; board_channels flattens the same rows.
+# A stream whose prefix is unlisted joins no section.
 CHANNEL_GROUPS = [
-    ({"Workshop": ["one"], "Domains": ["two", "three"]},
-     (("Workshop", ("one",)), ("Domains", ("two", "three")))),
-    ({}, ()),
+    ({"0ws": "", "1jf": "/x"},
+     ["1jf-setup", "0ws-status", "9am-random", "1jf-inbox"],
+     (("0ws", ("0ws-status",)), ("1jf", ("1jf-setup", "1jf-inbox")))),
+    ({}, ["0ws-setup"], ()),
 ]
