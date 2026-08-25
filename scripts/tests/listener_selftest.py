@@ -256,14 +256,17 @@ def _body():
         loops.kick_record = lambda loop_id, **k: rail_kicks.append(k.get("persona")) or 2
         loops.close = lambda loop_id, **k: rail_closed.append(loop_id)
         send_mod.post = lambda identity, channel, topic, body, **kw: rail_posts.append(body)
-        handle_rail_a(1, "c", "t", "record", "- Disposition: KICK\n- Next: jan: read the diff", "bob")
-        handle_rail_a(1, "c", "t", "record", "- Disposition: CLOSE\n- Next: none", "bob")
-        handle_rail_a(1, "c", "t", "record", "a reply with no handoff block", "bob")
+        waking, target = personas.PERSONAS[0], personas.PERSONAS[-1]
+        handle_rail_a(1, "c", "t", "record",
+                      "- Disposition: KICK\n- Next: %s: read the diff" % target, waking)
+        handle_rail_a(1, "c", "t", "record", "- Disposition: CLOSE\n- Next: none", waking)
+        handle_rail_a(1, "c", "t", "record", "a reply with no handoff block", waking)
     finally:
         (runner.run, loops.loop_for_lane, loops.budget_reached, loops.kick_record,
          loops.close, send_mod.post, store.cost_append, log.disabled) = saved_rail
-    kicked = rail_kicks == ["jan"] and len(rail_posts) == 2 \
-        and personas.display_name("jan") in rail_posts[0] and rail_posts[0].endswith("kick 2/3")
+    target = personas.PERSONAS[-1]
+    kicked = rail_kicks == [target] and len(rail_posts) == 2 \
+        and personas.display_name(target) in rail_posts[0] and rail_posts[0].endswith("kick 2/3")
     closed = rail_closed == [7] and prompts.HANDOFF_CLOSE_REASON in rail_posts[1]
     if kicked and closed and rail_spawns == ["operator"]:
         passed += 1

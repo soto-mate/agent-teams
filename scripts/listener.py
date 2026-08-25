@@ -182,6 +182,10 @@ def parse_operator_decision(text):
 
 
 _HANDOFF_CLOSE = ("CLOSE", "NEEDS MATE")
+# both spellings a persona might write before the colon, back to the roster key: the display
+# name is not always the key capitalized ("Ma'at"), and a missed prefix kicks the wrong seat.
+_HANDOFF_NAMES = dict({name.lower(): name for name in personas.PERSONAS},
+                      **{display.lower(): name for name, display in personas.DISPLAY_NAMES.items()})
 
 
 def _handoff_lines(text):
@@ -216,8 +220,8 @@ def parse_handoff(text, persona):
     if nxt.lower() in ("", "none"):
         return None
     name, sep, rest = nxt.partition(":")
-    key = name.strip().lower()
-    if sep and key in personas.PERSONAS and rest.strip():
+    key = _HANDOFF_NAMES.get(name.strip().lower())
+    if sep and key and rest.strip():
         return ("kick", key, rest.strip())
     if persona not in personas.PERSONAS:
         return None
