@@ -4,6 +4,8 @@
 # ~/Library/LaunchAgents, then confirms the fresh start line landed in the log.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 launchd_label() {
     printf '%s\n' "${AGENT_TEAM_LAUNCHD_LABEL:-com.agent-team}"
 }
@@ -14,12 +16,51 @@ plist_path() {
     printf '%s\n' "$HOME/Library/LaunchAgents/$(launchd_label).plist"
 }
 
+fleet_home_path() {
+    PYTHONPATH="$SCRIPT_DIR" python3 -c 'import constants; print(constants.FLEET_HOME)'
+}
+
+prepare_fleet_home() {
+    fleet_home="$1"
+    real_home="$2"
+    mkdir -p "$fleet_home"
+    for name in .gitconfig .ssh .config .local; do
+        source_path="$real_home/$name"
+        target_path="$fleet_home/$name"
+        if [ ! -e "$source_path" ] && [ ! -L "$source_path" ]; then
+            echo "restart.sh: missing fleet home source $source_path" >&2
+            return 1
+        fi
+        if [ -L "$target_path" ]; then
+            if [ "$(readlink "$target_path")" != "$source_path" ]; then
+                echo "restart.sh: refusing mismatched fleet home link $target_path" >&2
+                return 1
+            fi
+        elif [ -e "$target_path" ]; then
+            echo "restart.sh: refusing existing fleet home path $target_path" >&2
+            return 1
+        else
+            ln -s "$source_path" "$target_path"
+        fi
+    done
+}
+
 if [ "${1:-}" = "--selftest" ]; then
     test "$(unset AGENT_TEAM_LAUNCHD_LABEL; launchd_label)" = "com.agent-team"
     test "$(AGENT_TEAM_LAUNCHD_LABEL=com.example.agent-team launchd_label)" = "com.example.agent-team"
     test "$(HOME=/tmp/bob AGENT_TEAM_LAUNCHD_LABEL=com.example.agent-team plist_path)" \
         = "/tmp/bob/Library/LaunchAgents/com.example.agent-team.plist"
-    echo "restart.sh selftest: 3 PASS, 0 FAIL"
+    test_root="$(mktemp -d)"
+    trap 'rm -rf "$test_root"' EXIT
+    mkdir -p "$test_root/real/.ssh" "$test_root/real/.config" "$test_root/real/.local"
+    touch "$test_root/real/.gitconfig"
+    prepare_fleet_home "$test_root/fleet" "$test_root/real"
+    test "$(readlink "$test_root/fleet/.gitconfig")" = "$test_root/real/.gitconfig"
+    test "$(readlink "$test_root/fleet/.ssh")" = "$test_root/real/.ssh"
+    test "$(readlink "$test_root/fleet/.config")" = "$test_root/real/.config"
+    test "$(readlink "$test_root/fleet/.local")" = "$test_root/real/.local"
+    prepare_fleet_home "$test_root/fleet" "$test_root/real"
+    echo "restart.sh selftest: 8 PASS, 0 FAIL"
     exit 0
 fi
 
@@ -27,7 +68,6 @@ TIMEOUT_SEC="${1:-2100}"   # ~35 min default
 POLL_SEC=15
 CONFIRM_TIMEOUT_SEC=30
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOGS_DIR="${AGENT_TEAM_LOGS_DIR:-$HOME/.config/agent-team/logs}"
 LOG_PATH="$LOGS_DIR/listener.err.log"  # launchd routes the logger's stderr here
 LABEL="$(launchd_label)"
@@ -38,6 +78,10 @@ if [ ! -f "$PLIST" ]; then
     echo "restart.sh: no plist at $PLIST; render it per ADOPTING.md (Prepare the runtime)" >&2
     exit 1
 fi
+
+FLEET_HOME="$(fleet_home_path)"
+echo "restart.sh: preparing fleet home at $FLEET_HOME"
+prepare_fleet_home "$FLEET_HOME" "$HOME"
 
 inflight_count() {
     PYTHONPATH="$SCRIPT_DIR" python3 -c "import store; print(len(store.inflight_all()))"

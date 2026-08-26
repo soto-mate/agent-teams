@@ -55,16 +55,26 @@ def _body():
 
     try:
         harness = json.loads(HARNESS_DEFAULTS_EXAMPLE_PATH.read_text())
+        row_keys = {
+            "claude": {"model", "effort", "flags"},
+            "codex": {"model", "effort", "flags", "home", "config_home"},
+            "agy": {"model", "effort", "flags"},
+            "opencode": {"model", "effort", "flags", "home"},
+        }
         valid_rows = all(
-            isinstance(row, dict) and set(row) == {"model", "effort", "flags"}
+            isinstance(row, dict) and set(row) == row_keys.get(provider)
             and isinstance(row["model"], str) and bool(row["model"])
             and row["effort"] in _EFFORT_SCALE
             and isinstance(row["flags"], dict)
             and all(isinstance(flag, str) and flag and isinstance(model, str) and model
                     for flag, model in row["flags"].items())
-            for row in harness.values()
+            and all(isinstance(row[key], str) and Path(row[key]).expanduser().is_absolute()
+                    for key in row_keys[provider] - {"model", "effort", "flags"})
+            for provider, row in harness.items()
         )
-        if set(harness) == {"claude", "codex", "agy", "opencode"} and valid_rows:
+        same_home = (Path(harness["codex"]["home"]).expanduser()
+                     == Path(harness["opencode"]["home"]).expanduser())
+        if set(harness) == set(row_keys) and valid_rows and same_home:
             passed += 1
         else:
             failed += 1
