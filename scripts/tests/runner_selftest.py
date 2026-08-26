@@ -47,9 +47,12 @@ def _body():
     original_persona_dir = PERSONA_DIR
     persona_fixture = tempfile.TemporaryDirectory()
     PERSONA_DIR = Path(persona_fixture.name)
-    for persona, expected in cases.PERSONA_FILES:
-        if expected is True:
-            (PERSONA_DIR / (persona + ".md")).write_text("fixture\n")
+    fixture_personas = ({persona for persona, expected in cases.PERSONA_FILES if expected is True} |
+                        {row[0] for row in cases.RUNNER_CMDS})
+    for persona in fixture_personas:
+        (PERSONA_DIR / (persona + ".md")).write_text(
+            "---\nname: %s\ndescription: %s fixture\n---\nfixture body\n" %
+            (persona, persona))
     for stderr, stdout, expected in cases.FAILURE_OUTPUTS:
         got = _failure_output(stderr, stdout)
         if got == expected:

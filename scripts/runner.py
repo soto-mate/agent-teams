@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import constants
+import personas
 import prompts
 import store
 
@@ -175,8 +176,14 @@ def _build_cmd(persona, model, session, effort, mcp_config=None):
     """claude -p --agent <persona> with realtime JSON events and one terminal result.
     No prompt argument: with none, claude -p reads it from stdin."""
     # headless has nobody to approve, and an untrusted cwd (a build worktree) fences Bash off
+    persona_file = _persona_file(persona)
+    agents = json.dumps({persona: {
+        "description": personas._frontmatter(persona_file)["description"],
+        "prompt": _without_frontmatter(persona_file.read_text()),
+    }})
     cmd = [constants.CLAUDE_BIN, "-p", "--dangerously-skip-permissions",
            "--output-format", "stream-json", "--verbose", "--agent", persona,
+           "--agents", agents,
            "--strict-mcp-config", "--setting-sources", "project,local"]
     if mcp_config:
         cmd += ["--mcp-config", str(mcp_config)]
