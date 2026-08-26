@@ -460,7 +460,9 @@ def launchd_status(label, run=subprocess.run, uid_fn=os.getuid):
 
 def health_ok(url, fetch=urllib.request.urlopen, timeout=2):
     try:
-        with fetch(url, timeout=timeout) as response:
+        request = urllib.request.Request(
+            url, headers={"User-Agent": "agent-team-monitor/1.0"})
+        with fetch(request, timeout=timeout) as response:
             return response.getcode() == 200
     except Exception:
         return False

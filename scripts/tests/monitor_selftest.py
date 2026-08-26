@@ -385,6 +385,32 @@ def _body():
         failed += 1
         print("FAIL health_ok did not swallow a refused connection")
 
+    class _HealthResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def getcode(self):
+            return 200
+
+    health_requests = []
+
+    def recording_fetch(request, timeout=None):
+        health_requests.append((request, timeout))
+        return _HealthResponse()
+
+    healthy = health_ok("https://voice.example/health", fetch=recording_fetch)
+    request, timeout = health_requests[0]
+    if healthy and request.full_url == "https://voice.example/health" \
+            and request.get_header("User-agent") == "agent-team-monitor/1.0" \
+            and timeout == 2:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL health_ok request -> %r timeout=%r" % (request.__dict__, timeout))
+
     checked = []
     rows = daemon_rows(
         cases.MONITOR_DAEMONS,
