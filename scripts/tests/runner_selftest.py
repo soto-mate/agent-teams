@@ -224,6 +224,37 @@ def _body():
             print("FAIL _persona_file(%r) resolved %r wanted %r" %
                   (persona, got, expected))
 
+    for expected_home, expected_codex_home, expected_stdin in cases.CODEX_ENVIRONMENTS:
+        captured = {}
+
+        def fake_run(*args, **kwargs):
+            cmd = args[0]
+            captured["stdin"] = kwargs.get("stdin")
+            captured["input"] = kwargs.get("input")
+            captured.update(kwargs["env"])
+            Path(cmd[cmd.index("-o") + 1]).write_text("ok\n")
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout=cases.CODEX_PARSES[0][0], stderr="")
+
+        original_popen = subprocess.Popen
+        try:
+            subprocess.Popen = popen_from(fake_run)
+            _run_codex(
+                "bob", "hi", model="model", effort="high", session="session",
+                cwd=REPO_DIR, timeout=1, identity=None)
+        finally:
+            subprocess.Popen = original_popen
+        got_stdin = ("brief" if captured.get("input") == "hi"
+                     and captured.get("stdin") == subprocess.PIPE
+                     else "other")
+        got = (captured.get("HOME"), captured.get("CODEX_HOME"), got_stdin)
+        expected = (expected_home, expected_codex_home, expected_stdin)
+        if got == expected:
+            passed += 1
+        else:
+            failed += 1
+            print("FAIL Codex env/stdin -> %r wanted %r" % (got, expected))
+
     for model, session, effort, cwd, expected in cases.OPENCODE_RUNNER_CMDS:
         got = _build_cmd_opencode(model, session, effort, cwd)
         if got == expected:
@@ -244,7 +275,7 @@ def _body():
             failed += 1
             print("FAIL _parse_opencode(...) -> %r wanted %r" % (got, expected))
 
-    for inherited, expected, expected_stdin in cases.OPENCODE_ENVIRONMENTS:
+    for inherited, expected, expected_home, expected_stdin in cases.OPENCODE_ENVIRONMENTS:
         before = os.environ.get("OPENCODE_DISABLE_CLAUDE_CODE")
         captured = {}
 
@@ -273,17 +304,17 @@ def _body():
                 os.environ.pop("OPENCODE_DISABLE_CLAUDE_CODE", None)
             else:
                 os.environ["OPENCODE_DISABLE_CLAUDE_CODE"] = before
-        got = captured.get("OPENCODE_DISABLE_CLAUDE_CODE")
+        got = (captured.get("OPENCODE_DISABLE_CLAUDE_CODE"), captured.get("HOME"))
         # Popen opens the pipe; communicate writes the brief and closes it.
         got_stdin = ("brief" if captured.get("input") == "hi"
                      and captured.get("stdin") == subprocess.PIPE
                      else "other")
-        if got == expected and got_stdin == expected_stdin:
+        if got == (expected, expected_home) and got_stdin == expected_stdin:
             passed += 1
         else:
             failed += 1
             print("FAIL OpenCode env/stdin from %r -> %r/%r wanted %r/%r" %
-                  (inherited, got, got_stdin, expected, expected_stdin))
+                  (inherited, got, got_stdin, (expected, expected_home), expected_stdin))
 
     for inherited, expected in cases.CLAUDE_ENVIRONMENTS:
         before = os.environ.get("CLAUDE_CODE_DISABLE_AUTO_MEMORY")

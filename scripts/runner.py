@@ -176,7 +176,8 @@ def _build_cmd(persona, model, session, effort, mcp_config=None):
     No prompt argument: with none, claude -p reads it from stdin."""
     # headless has nobody to approve, and an untrusted cwd (a build worktree) fences Bash off
     cmd = [constants.CLAUDE_BIN, "-p", "--dangerously-skip-permissions",
-           "--output-format", "stream-json", "--verbose", "--agent", persona]
+           "--output-format", "stream-json", "--verbose", "--agent", persona,
+           "--strict-mcp-config", "--setting-sources", "project,local"]
     if mcp_config:
         cmd += ["--mcp-config", str(mcp_config)]
     if model:
@@ -493,6 +494,8 @@ def _run_codex(persona, prompt, *, model, effort, session, cwd, timeout, identit
         cmd = _build_cmd_codex(model, session, effort, final_path, _mcp_servers())
         env = dict(os.environ)
         env["AGENT_TEAM_IDENTITY"] = _wake_identity(persona, identity)
+        env["HOME"] = str(constants.FLEET_HOME)
+        env["CODEX_HOME"] = str(constants.CODEX_CONFIG_HOME)
         proc, stdout = _run_jsonl(
             cmd, cwd=run_cwd, env=env, timeout=timeout, wake_log=wake_log,
             stdin_text=run_prompt, tee_stderr=True)
@@ -580,6 +583,7 @@ def _run_opencode(persona, prompt, *, model, effort, session, cwd, timeout, iden
     cmd = _build_cmd_opencode(model, session, effort, run_cwd)
     env = dict(os.environ)
     env["AGENT_TEAM_IDENTITY"] = _wake_identity(persona, identity)
+    env["HOME"] = str(constants.FLEET_HOME)
     env["OPENCODE_DISABLE_CLAUDE_CODE"] = "true"
     servers = _mcp_servers()
     if servers:

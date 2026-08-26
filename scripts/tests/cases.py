@@ -440,18 +440,23 @@ FAILURE_OUTPUTS = [
 RUNNER_CMDS = [
     ("peter", None, None, None, None,
      ["claude", "-p", "--dangerously-skip-permissions",
-      "--output-format", "stream-json", "--verbose", "--agent", "peter"]),
+      "--output-format", "stream-json", "--verbose", "--agent", "peter",
+      "--strict-mcp-config", "--setting-sources", "project,local"]),
     ("bob", "sonnet", None, None, Path("/tmp/playwright.json"),
      ["claude", "-p", "--dangerously-skip-permissions",
       "--output-format", "stream-json", "--verbose", "--agent", "bob",
+      "--strict-mcp-config", "--setting-sources", "project,local",
       "--mcp-config", "/tmp/playwright.json", "--model", "sonnet"]),
     ("archie", "sonnet", "sid-123", "high", None,
      ["claude", "-p", "--dangerously-skip-permissions",
       "--output-format", "stream-json", "--verbose", "--agent", "archie",
+      "--strict-mcp-config", "--setting-sources", "project,local",
       "--model", "sonnet", "--resume", "sid-123", "--effort", "high"]),
     ("eve", None, "sid-9", None, None,
      ["claude", "-p", "--dangerously-skip-permissions",
-      "--output-format", "stream-json", "--verbose", "--agent", "eve", "--resume", "sid-9"]),
+      "--output-format", "stream-json", "--verbose", "--agent", "eve",
+      "--strict-mcp-config", "--setting-sources", "project,local",
+      "--resume", "sid-9"]),
 ]
 
 MCP_SERVERS = {
@@ -494,6 +499,11 @@ CODEX_RUNNER_CMDS = [
             "019ffcaf-probe",
         ],
     ),
+]
+
+# (HOME, CODEX_HOME, what stdin carries) for the spawned Codex environment.
+CODEX_ENVIRONMENTS = [
+    (str(constants.FLEET_HOME), str(constants.CODEX_CONFIG_HOME), "brief"),
 ]
 
 OPENCODE_MCP_CONFIG = {
@@ -1636,12 +1646,12 @@ OPENCODE_RUNNER_CMDS = [
     ),
 ]
 
-# (inherited OPENCODE_DISABLE_CLAUDE_CODE, the value the spawn gets, what its stdin carries).
+# (inherited OPENCODE_DISABLE_CLAUDE_CODE, value the spawn gets, HOME, stdin content).
 # The brief now feeds stdin, which subprocess closes after writing: the CLI still cannot read
 # or hold the listener's own stdin open.
 OPENCODE_ENVIRONMENTS = [
-    (None, "true", "brief"),
-    ("false", "true", "brief"),
+    (None, "true", str(constants.FLEET_HOME), "brief"),
+    ("false", "true", str(constants.FLEET_HOME), "brief"),
 ]
 
 # Captured from opencode run --format json on this Mac, 2026-08-13.

@@ -88,6 +88,22 @@ _DOMAINS = _load_domains()
 _STATUS = _load_status()
 EMBASSIES = _load_embassies()
 
+
+def _harness_path(provider, key):
+    try:
+        raw = HARNESS_DEFAULTS[provider][key]
+    except KeyError:
+        raise RuntimeError("harness defaults have no %s.%s" % (provider, key))
+    if not isinstance(raw, str) or not raw:
+        raise RuntimeError("harness default %s.%s is not a path" % (provider, key))
+    return Path(raw).expanduser()
+
+
+FLEET_HOME = _harness_path("codex", "home")
+if _harness_path("opencode", "home") != FLEET_HOME:
+    raise RuntimeError("codex and opencode harness homes differ")
+CODEX_CONFIG_HOME = _harness_path("codex", "config_home")
+
 _EFFORT_SCALE = {
     "low": {"claude": "low", "codex": "low", "opencode": "low", "agy": "low"},
     "mid": {"claude": "medium", "codex": "medium", "opencode": "medium", "agy": "medium"},
