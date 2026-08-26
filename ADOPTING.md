@@ -111,9 +111,9 @@ In the fork's GitHub settings, allow auto-merge and restrict merges to rebase. T
 `main` with the required status check `selftests`, the job key from the selftests workflow
 rather than its file name; enforce it for admins, require zero approvals, leave force pushes
 off, and do not require branches to be up to date, which would stall auto-merge whenever two
-land at once. Make `gh` resolve on the PATH a wake inherits, which on a Homebrew Mac means
-linking `/opt/homebrew/bin/gh` into `~/.local/bin`: a wake's PATH carries the latter and not
-the former.
+land at once. Make `gh` resolve on the PATH a wake inherits: the launchd template carries
+`/opt/homebrew/bin` and `~/.local/bin`, so a Homebrew install resolves as it is, and an install
+that keeps `gh` anywhere else links it into `~/.local/bin`, which the template carries first.
 
 Read the settings back rather than trusting the clicks:
 
@@ -142,6 +142,10 @@ repo_dir=$(pwd -P)
 sed -e "s|__HOME__|$HOME|g" -e "s|__REPO_DIR__|$repo_dir|g" \
   launchd/com.agent-team.plist.example > ~/Library/LaunchAgents/com.agent-team.plist
 ```
+
+The template's PATH carries `/opt/homebrew/bin` after the system directories and ahead of
+`/usr/local/bin`, so a wake gets Homebrew's `node` and `sf` rather than an older `/usr/local`
+copy, while `python3` and `git` stay the system ones.
 
 That directory is the only one launchd reloads at login, so a reboot brings the fleet back by
 itself. Nothing renders into the repository: a job bootstrapped from any other path is

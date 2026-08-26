@@ -29,7 +29,7 @@
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>PATH</key>
-		<string>__HOME__/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin</string>
+		<string>__HOME__/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin</string>
 	</dict>
 </dict>
 </plist>
